@@ -83,6 +83,7 @@ def reconcile_payment(
     payment_case.amount = snapshot.amount
     payment_case.currency = snapshot.currency
     payment_case.razorpay_payment_status = snapshot.status
+    payment_case.razorpay_payment_method = snapshot.method
     payment_case.error_code = snapshot.error_code
     payment_case.error_description = snapshot.error_description
     payment_case.error_source = snapshot.error_source

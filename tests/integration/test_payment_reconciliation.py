@@ -45,6 +45,7 @@ def test_failed_payment_is_reconciled_with_authoritative_metadata(
     assert result.processing_status is EventProcessingStatus.PROCESSED
     assert payment_case.current_state is CaseState.RECONCILING
     assert payment_case.razorpay_payment_status == "failed"
+    assert payment_case.razorpay_payment_method == "card"
     assert payment_case.amount == 18_501
     assert isinstance(payment_case.amount, int)
     assert payment_case.currency == "INR"

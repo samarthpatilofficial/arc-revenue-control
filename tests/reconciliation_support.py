@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from arc.assessment import CaseAssessmentService
 from arc.domain.enums import EventProcessingStatus
 from arc.domain.models import CaseEvent, PaymentCase, WebhookEvent
 from arc.integrations.razorpay import PaymentSnapshot, SubscriptionSnapshot
@@ -55,6 +56,12 @@ def payment_snapshot(
     currency: str = "INR",
     customer_id: str | None = "cust_authoritative",
     subscription_id: str | None = None,
+    method: str | None = "card",
+    error_code: str | None = "BAD_REQUEST_ERROR",
+    error_description: str | None = "Synthetic test failure",
+    error_source: str | None = "customer",
+    error_step: str | None = "payment_authentication",
+    error_reason: str | None = "incorrect_otp",
 ) -> PaymentSnapshot:
     return PaymentSnapshot.model_validate(
         {
@@ -65,12 +72,14 @@ def payment_snapshot(
             "customer_id": customer_id,
             "subscription_id": subscription_id,
             "order_id": "order_test",
-            "method": "card",
-            "error_code": "BAD_REQUEST_ERROR" if status == "failed" else None,
-            "error_description": "Synthetic test failure" if status == "failed" else None,
-            "error_source": "customer" if status == "failed" else None,
-            "error_step": "payment_authentication" if status == "failed" else None,
-            "error_reason": "incorrect_otp" if status == "failed" else None,
+            "method": method,
+            "error_code": error_code if status == "failed" else None,
+            "error_description": (
+                error_description if status == "failed" else None
+            ),
+            "error_source": error_source if status == "failed" else None,
+            "error_step": error_step if status == "failed" else None,
+            "error_reason": error_reason if status == "failed" else None,
             "created_at": 1_725_000_000,
         }
     )
@@ -154,6 +163,17 @@ def processor(
     return WebhookEventProcessor(
         session_factory=session_factory,
         razorpay_client=client,
+        clock=clock,
+    )
+
+
+def assessor(
+    session_factory: SessionFactory,
+    *,
+    clock: Callable[[], datetime],
+) -> CaseAssessmentService:
+    return CaseAssessmentService(
+        session_factory=session_factory,
         clock=clock,
     )
 

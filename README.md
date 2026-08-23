@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository currently contains ARC's Day 1 backend financial foundation: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, secure webhook ingress, an immutable external event ledger, and authoritative read-only Razorpay reconciliation.
+This repository currently contains ARC's Day 1 backend financial core: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, secure webhook ingress, an immutable external event ledger, authoritative read-only Razorpay reconciliation, a deterministic recovery preconditions gate, and deterministic failure diagnosis.
 
 ## Local setup
 
@@ -69,7 +69,15 @@ GET /v1/payments/{payment_id}
 GET /v1/subscriptions/{subscription_id}
 ```
 
-The fetched status is stored separately from ARC's guarded case lifecycle. A captured payment or active subscription can safely resolve an existing case without trusting webhook order. A `pending` subscription means Razorpay's platform retry remains active; `halted` means those retries are exhausted. This foundation records those facts but does not diagnose failures, run AI, propose or execute recovery actions, increment recovery attempts, or attribute revenue.
+The fetched status is stored separately from ARC's guarded case lifecycle. A captured payment or active subscription can safely resolve an existing case without trusting webhook order. After reconciliation, ARC's assessment service applies this bounded sequence:
+
+```text
+authoritative reconciliation -> precondition gate -> deterministic diagnosis
+```
+
+A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so ARC does not compete with Razorpay retries; and a `halted` subscription is eligible for deterministic diagnosis because automatic retries are exhausted. Payment diagnosis uses structured Razorpay reason, source, and step fields in that precedence order, with bounded future-tolerant fallbacks.
+
+AI strategy, merchant authorization, recovery execution, Payment Links, human approval workflows, recovery-attempt changes, and revenue attribution are not implemented yet. The deterministic assessment projection does not choose or execute a customer recovery action.
 
 Run the tests with:
 

@@ -97,6 +97,27 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     }
     assert payment_case_columns["razorpay_payment_status"]["nullable"] is True
     assert payment_case_columns["razorpay_subscription_status"]["nullable"] is True
+    assert payment_case_columns["razorpay_payment_method"]["nullable"] is True
+    assert payment_case_columns["eligibility_status"]["nullable"] is True
+    assert payment_case_columns["eligibility_evaluated_at"]["type"].timezone is True
+    assert payment_case_columns["failure_category"]["nullable"] is True
+    assert payment_case_columns["recovery_disposition"]["nullable"] is True
+    assert payment_case_columns["diagnosed_at"]["type"].timezone is True
+    assert payment_case_columns["assessment_fingerprint"]["nullable"] is True
+
+    payment_case_checks = {
+        constraint["name"]
+        for constraint in database_inspector.get_check_constraints(
+            "payment_cases"
+        )
+    }
+    assert "ck_payment_cases_eligibility_status" in payment_case_checks
+    assert "ck_payment_cases_failure_category" in payment_case_checks
+    assert "ck_payment_cases_recovery_disposition" in payment_case_checks
+    assert (
+        "ck_payment_cases_assessment_fingerprint_sha256_hex"
+        in payment_case_checks
+    )
 
     webhook_indexes = {
         index["name"] for index in database_inspector.get_indexes("webhook_events")
