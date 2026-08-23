@@ -77,10 +77,10 @@ authoritative reconciliation -> precondition gate -> deterministic diagnosis
 
 A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so ARC does not compete with Razorpay retries; and a `halted` subscription is eligible for deterministic diagnosis because automatic retries are exhausted. Payment diagnosis uses structured Razorpay reason, source, and step fields in that precedence order, with bounded future-tolerant fallbacks.
 
-Eligible `DIAGNOSED` cases can now move through a bounded proposal stage:
+Eligible `DIAGNOSED` cases can now move through the governed recovery path:
 
 ```text
-reconcile -> eligibility -> deterministic diagnosis -> bounded AI/rule proposal -> deterministic merchant policy
+reconcile -> eligibility -> diagnose -> strategy -> authorize -> approve if required -> execute bounded action -> wait for outcome
 ```
 
 AI proposals use the OpenAI Responses API with strict Structured Outputs and the fixed action vocabulary `NO_ACTION`, `WAIT`, `REQUEST_RETRY`, `CREATE_RECOVERY_LINK`, `REQUEST_PAYMENT_METHOD_UPDATE`, and `ESCALATE_TO_HUMAN`. Manual-review and merchant-fix dispositions bypass AI and produce deterministic rule proposals. Strategy generation sends no customer PII or external payment/subscription identifiers, and a post-inference database fence discards output if reconciled facts changed while the model was running.
@@ -89,7 +89,11 @@ Set `OPENAI_API_KEY` privately only when AI strategy generation is needed; appli
 
 Merchant authorization is deterministic. It validates the action allowlist, automated-attempt and customer-contact limits, recovery window, approval threshold, and a small typed stopping-rule schema. Missing or malformed policy fails closed for external recovery actions. Safe internal actions remain available, and high-value cases can require human approval. Model confidence is observability data and cannot bypass policy.
 
-**AI proposes. Policy authorizes.** Execution is still not implemented. `POLICY_VALIDATED` alone is not permission to execute; a future executor must load the current unsuperseded policy decision, and only `AUTHORIZED` is executable. `REQUIRES_APPROVAL` and `BLOCKED` remain non-executable. Payment Links, payment writes, customer communication, approval UI, frontend, outcome observation, and revenue attribution are not implemented yet.
+**AI proposes. Policy authorizes. Human approval clears only the exact approval-required decision. The executor performs only that governed action.** `POLICY_VALIDATED` alone is not permission to execute: the executor rechecks current assessment, diagnosis, strategy, policy, counters, recovery window, and any exact approved record immediately before claiming work.
+
+Standard Razorpay Payment Link creation is ARC's first real external recovery side effect. `CREATE_RECOVERY_LINK` uses a stable `arc_<action-uuid>` reference, disables partial payments, reminders, SMS, and email, sends no customer PII, and recovers uncertain create outcomes through lookup-before-create. A PostgreSQL action ledger provides one row per policy decision, execution leases, exact-once counters, sanitized provider projections, and post-request compensation when financial truth changes during creation. `WAIT`, `NO_ACTION`, and `ESCALATE_TO_HUMAN` are bounded internal actions. `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` fail safely as not implemented because ARC has no valid Razorpay retry or customer-delivery executor for them.
+
+There is no public approval UI or production operator identity system yet. ARC does not capture or refund payments, send customer communications, observe Payment Link outcomes, attribute recovered revenue, expose a frontend, or claim that creating a link recovered money. Those remain subsequent tasks.
 
 Run the tests with:
 

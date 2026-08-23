@@ -24,9 +24,11 @@ from arc.db.base import Base
 from arc.domain.enums import PolicyDecisionResult
 
 if TYPE_CHECKING:
+    from arc.domain.models.approval_request import ApprovalRequest
     from arc.domain.models.merchant_policy import MerchantPolicy
     from arc.domain.models.payment_case import PaymentCase
     from arc.domain.models.strategy_proposal import StrategyProposal
+    from arc.domain.models.recovery_action import RecoveryActionRecord
 
 policy_decision_result_type = SqlEnum(
     PolicyDecisionResult,
@@ -161,4 +163,12 @@ class PolicyDecision(Base):
     )
     merchant_policy: Mapped["MerchantPolicy | None"] = relationship(
         back_populates="policy_decisions"
+    )
+    approval_request: Mapped["ApprovalRequest | None"] = relationship(
+        back_populates="policy_decision",
+        uselist=False,
+    )
+    recovery_action: Mapped["RecoveryActionRecord | None"] = relationship(
+        back_populates="policy_decision",
+        uselist=False,
     )

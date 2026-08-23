@@ -1,6 +1,7 @@
 """Core ARC domain types."""
 
 from arc.domain.enums import (
+    ApprovalStatus,
     CaseState,
     EligibilityDecision,
     EventProcessingStatus,
@@ -8,10 +9,12 @@ from arc.domain.enums import (
     PolicyDecisionResult,
     RecoveryAction,
     RecoveryDisposition,
+    RecoveryExecutionStatus,
     StrategySource,
 )
 
 __all__ = [
+    "ApprovalStatus",
     "CaseState",
     "EligibilityDecision",
     "EventProcessingStatus",
@@ -19,5 +22,6 @@ __all__ = [
     "PolicyDecisionResult",
     "RecoveryAction",
     "RecoveryDisposition",
+    "RecoveryExecutionStatus",
     "StrategySource",
 ]

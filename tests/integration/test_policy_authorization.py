@@ -6,7 +6,7 @@ from threading import Barrier
 from uuid import UUID
 
 import pytest
-from sqlalchemy import inspect, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from arc.assessment import CaseAssessmentService
@@ -19,6 +19,7 @@ from arc.domain.models import (
     MerchantPolicy,
     PaymentCase,
     PolicyDecision,
+    RecoveryActionRecord,
     StrategyProposal,
 )
 from arc.intelligence.schemas import (
@@ -208,9 +209,16 @@ def test_valid_policy_authorizes_persists_transitions_and_audits(
     assert is_execution_authorized(decisions[0]) is True
     assert sum(event.event_type == "POLICY_AUTHORIZED" for event in events) == 1
     assert len(client.calls) == 1
-    assert "recovery_actions" not in inspect(
+    assert "recovery_actions" in inspect(
         integration_session_factory.kw["bind"]
     ).get_table_names()
+    with integration_session_factory() as session:
+        assert (
+            session.scalar(
+                select(func.count()).select_from(RecoveryActionRecord)
+            )
+            == 0
+        )
 
 
 def test_identical_evaluation_is_idempotent_without_duplicate_audit(

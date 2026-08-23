@@ -25,6 +25,7 @@ from arc.domain.enums import RecoveryAction, StrategySource
 if TYPE_CHECKING:
     from arc.domain.models.payment_case import PaymentCase
     from arc.domain.models.policy_decision import PolicyDecision
+    from arc.domain.models.recovery_action import RecoveryActionRecord
 
 strategy_source_type = SqlEnum(
     StrategySource,
@@ -171,4 +172,8 @@ class StrategyProposal(Base):
     policy_decisions: Mapped[list["PolicyDecision"]] = relationship(
         back_populates="strategy_proposal",
         order_by="PolicyDecision.evaluated_at",
+    )
+    recovery_actions: Mapped[list["RecoveryActionRecord"]] = relationship(
+        back_populates="strategy_proposal",
+        order_by="RecoveryActionRecord.created_at",
     )

@@ -27,8 +27,10 @@ from arc.domain.enums import (
 )
 
 if TYPE_CHECKING:
+    from arc.domain.models.approval_request import ApprovalRequest
     from arc.domain.models.case_event import CaseEvent
     from arc.domain.models.policy_decision import PolicyDecision
+    from arc.domain.models.recovery_action import RecoveryActionRecord
     from arc.domain.models.strategy_proposal import StrategyProposal
 
 case_state_type = SqlEnum(
@@ -212,4 +214,12 @@ class PaymentCase(Base):
     policy_decisions: Mapped[list["PolicyDecision"]] = relationship(
         back_populates="case",
         order_by="PolicyDecision.evaluated_at",
+    )
+    approval_requests: Mapped[list["ApprovalRequest"]] = relationship(
+        back_populates="case",
+        order_by="ApprovalRequest.requested_at",
+    )
+    recovery_actions: Mapped[list["RecoveryActionRecord"]] = relationship(
+        back_populates="case",
+        order_by="RecoveryActionRecord.created_at",
     )

@@ -95,3 +95,23 @@ class PolicyDecisionResult(StrEnum):
     AUTHORIZED = "AUTHORIZED"
     REQUIRES_APPROVAL = "REQUIRES_APPROVAL"
     BLOCKED = "BLOCKED"
+
+
+class ApprovalStatus(StrEnum):
+    """Bounded human approval lifecycle for one policy decision."""
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class RecoveryExecutionStatus(StrEnum):
+    """Durable execution states for one governed recovery action."""
+
+    PREPARED = "PREPARED"
+    IN_PROGRESS = "IN_PROGRESS"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    INDETERMINATE = "INDETERMINATE"
+    CANCELLED = "CANCELLED"
+    COMPENSATION_REQUIRED = "COMPENSATION_REQUIRED"

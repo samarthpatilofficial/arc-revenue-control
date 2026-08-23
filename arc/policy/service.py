@@ -8,35 +8,18 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from arc.domain.enums import (
-    CaseState,
-    EligibilityDecision,
-    PolicyDecisionResult,
-    RecoveryAction,
-)
+from arc.domain.enums import CaseState, PolicyDecisionResult, RecoveryAction
 from arc.domain.models import (
     MerchantPolicy,
     PaymentCase,
     PolicyDecision,
     StrategyProposal,
 )
-from arc.diagnosis import classify_failure
-from arc.intelligence.context import required_assessment_fingerprint
 from arc.policy.audit import POLICY_AUDIT_SOURCE, append_policy_audit
-from arc.policy.authorization import (
-    AuthorizationEvaluation,
-    AuthorizationFacts,
-    evaluate_authorization,
-)
-from arc.policy.fingerprint import (
-    build_authorization_input_fingerprint,
-    build_policy_fingerprint,
-)
-from arc.policy.eligibility import assess_eligibility
-from arc.policy.schemas import (
-    PolicyConfiguration,
-    PolicyConfigurationError,
-    validate_policy,
+from arc.policy.authorization import AuthorizationEvaluation
+from arc.policy.current import (
+    CurrentAuthorizationError,
+    recompute_current_authorization_inputs,
 )
 from arc.reconciliation.state_machine import transition_case
 
@@ -122,61 +105,22 @@ class MerchantAuthorizationService:
                 raise PolicyProposalNotCurrentError(
                     "Only the current strategy proposal may be evaluated"
                 )
-            _validate_current_proposal(payment_case, proposal, clock=self._clock)
-
-            merchant_policy = session.scalar(
-                select(MerchantPolicy)
-                .where(MerchantPolicy.merchant_id == payment_case.merchant_id)
-                .with_for_update()
-            )
-            configuration = _validate_if_present(merchant_policy)
-            policy_fingerprint = build_policy_fingerprint(
-                merchant_policy,
-                configuration,
-            )
             evaluated_at = self._clock()
-            _require_aware_datetime(evaluated_at, "Policy clock")
-            _require_aware_datetime(payment_case.detected_at, "Case detected_at")
-            evaluation = evaluate_authorization(
-                AuthorizationFacts(
-                    action=proposal.action,
-                    amount_minor=payment_case.amount,
-                    attempt_count=payment_case.attempt_count,
-                    contact_attempt_count=payment_case.contact_attempt_count,
-                    detected_at=payment_case.detected_at,
-                    failure_category=payment_case.failure_category,
-                    payment_method=payment_case.razorpay_payment_method,
+            try:
+                current_inputs = recompute_current_authorization_inputs(
+                    session,
+                    payment_case,
+                    proposal,
                     evaluated_at=evaluated_at,
-                ),
-                policy_present=merchant_policy is not None,
-                configuration=configuration,
-            )
-            assessment_fingerprint = required_assessment_fingerprint(
-                payment_case
-            )
-            authorization_fingerprint = (
-                build_authorization_input_fingerprint(
-                    strategy_proposal_id=proposal.id,
-                    strategy_input_fingerprint=(
-                        proposal.strategy_input_fingerprint
-                    ),
-                    assessment_fingerprint=assessment_fingerprint,
-                    policy_fingerprint=policy_fingerprint,
-                    action=proposal.action,
-                    attempt_count=payment_case.attempt_count,
-                    contact_attempt_count=(
-                        payment_case.contact_attempt_count
-                    ),
-                    amount_minor=payment_case.amount,
-                    failure_category=payment_case.failure_category,
-                    payment_method=payment_case.razorpay_payment_method,
-                    recovery_window_ends_at=(
-                        evaluation.recovery_window_ends_at
-                    ),
-                    recovery_window_expired=(
-                        evaluation.recovery_window_expired
-                    ),
+                    lock_policy=True,
                 )
+            except CurrentAuthorizationError as error:
+                raise PolicyProposalNotCurrentError(str(error)) from error
+            merchant_policy = current_inputs.merchant_policy
+            evaluation = current_inputs.evaluation
+            policy_fingerprint = current_inputs.policy_fingerprint
+            authorization_fingerprint = (
+                current_inputs.authorization_input_fingerprint
             )
             existing = _find_identical_decision(
                 session,
@@ -286,64 +230,6 @@ def _load_current_proposal(
             "A current strategy proposal is required"
         )
     return proposal
-
-
-def _validate_current_proposal(
-    payment_case: PaymentCase,
-    proposal: StrategyProposal,
-    *,
-    clock: Callable[[], datetime],
-) -> None:
-    if proposal.case_id != payment_case.id or proposal.superseded_at is not None:
-        raise PolicyProposalNotCurrentError(
-            "Strategy proposal does not belong to the current case"
-        )
-    assessment_fingerprint = payment_case.assessment_fingerprint
-    if (
-        assessment_fingerprint is None
-        or proposal.assessment_fingerprint != assessment_fingerprint
-    ):
-        raise PolicyProposalNotCurrentError(
-            "Strategy proposal assessment is stale"
-        )
-    eligibility = assess_eligibility(payment_case, clock=clock)
-    if (
-        eligibility.decision is not EligibilityDecision.ELIGIBLE
-        or eligibility.assessment_fingerprint != assessment_fingerprint
-        or payment_case.eligibility_status is not EligibilityDecision.ELIGIBLE
-        or payment_case.eligibility_reason_code != eligibility.reason_code
-    ):
-        raise PolicyProposalNotCurrentError(
-            "Strategy proposal no longer matches current eligibility"
-        )
-    diagnosis = classify_failure(payment_case)
-    if (
-        diagnosis.failure_category is not payment_case.failure_category
-        or diagnosis.recovery_disposition is not payment_case.recovery_disposition
-        or diagnosis.diagnosis_reason_code
-        != payment_case.diagnosis_reason_code
-    ):
-        raise PolicyProposalNotCurrentError(
-            "Strategy proposal no longer matches current diagnosis"
-        )
-
-
-def _validate_if_present(
-    merchant_policy: MerchantPolicy | None,
-) -> PolicyConfiguration | None:
-    if merchant_policy is None:
-        return None
-    try:
-        return validate_policy(merchant_policy)
-    except PolicyConfigurationError:
-        return None
-
-
-def _require_aware_datetime(value: datetime, name: str) -> None:
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise PolicyEvaluationNotAllowedError(
-            f"{name} must be timezone-aware"
-        )
 
 
 def _find_identical_decision(
