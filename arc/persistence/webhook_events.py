@@ -21,7 +21,12 @@ class RecordEventResult:
 
     inserted: bool
     duplicate: bool
+    integrity_mismatch: bool
     event: WebhookEvent
+
+
+class EventPersistenceError(RuntimeError):
+    """Raised when an event insert outcome cannot be resolved deterministically."""
 
 
 def hash_payload(raw_payload: Mapping[str, Any]) -> str:
@@ -43,6 +48,8 @@ def record_event_once(
     event_type: str,
     raw_payload: Mapping[str, Any],
     signature_verified: bool,
+    raw_body_sha256: str,
+    processing_status: EventProcessingStatus = EventProcessingStatus.RECEIVED,
     account_id: str | None = None,
     payment_id: str | None = None,
     subscription_id: str | None = None,
@@ -67,8 +74,9 @@ def record_event_once(
         "customer_id": customer_id,
         "raw_payload": payload,
         "payload_hash": hash_payload(payload),
+        "raw_body_sha256": raw_body_sha256,
         "signature_verified": signature_verified,
-        "processing_status": EventProcessingStatus.RECEIVED,
+        "processing_status": processing_status,
     }
     if received_at is not None:
         values["received_at"] = received_at
@@ -88,10 +96,13 @@ def record_event_once(
             select(WebhookEvent).where(WebhookEvent.id == inserted_id)
         )
         if event_record is None:
-            raise RuntimeError("Inserted webhook event could not be reloaded")
+            raise EventPersistenceError(
+                "Inserted webhook event could not be reloaded"
+            )
         return RecordEventResult(
             inserted=True,
             duplicate=False,
+            integrity_mismatch=False,
             event=event_record,
         )
 
@@ -101,10 +112,15 @@ def record_event_once(
         )
     )
     if event_record is None:
-        raise RuntimeError("Duplicate webhook event could not be loaded")
+        raise EventPersistenceError("Duplicate webhook event could not be loaded")
+
+    # A null stored digest identifies a legacy row whose exact request bytes
+    # cannot be proven equal, so webhook ingestion fails closed as an anomaly.
+    integrity_mismatch = event_record.raw_body_sha256 != raw_body_sha256
 
     return RecordEventResult(
         inserted=False,
         duplicate=True,
+        integrity_mismatch=integrity_mismatch,
         event=event_record,
     )

@@ -16,6 +16,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         debug=app_settings.debug,
     )
+    application.state.settings = app_settings
     application.include_router(api_router)
     return application
 

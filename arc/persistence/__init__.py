@@ -4,6 +4,7 @@ from arc.persistence.case_events import append_case_event
 from arc.persistence.merchant_policies import create_merchant_policy
 from arc.persistence.payment_cases import create_payment_case
 from arc.persistence.webhook_events import (
+    EventPersistenceError,
     RecordEventResult,
     hash_payload,
     record_event_once,
@@ -11,6 +12,7 @@ from arc.persistence.webhook_events import (
 
 __all__ = [
     "RecordEventResult",
+    "EventPersistenceError",
     "append_case_event",
     "create_merchant_policy",
     "create_payment_case",

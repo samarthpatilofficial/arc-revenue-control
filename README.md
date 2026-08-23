@@ -50,6 +50,18 @@ The API is available at `http://localhost:8000`. Its liveness endpoint is:
 GET /health
 ```
 
+### Webhook development
+
+Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file, then send Razorpay events to:
+
+```text
+POST /webhooks/razorpay
+```
+
+ARC verifies `X-Razorpay-Signature` using HMAC-SHA256 over the exact raw request bytes before parsing JSON. `x-razorpay-event-id` is required and protected by database uniqueness. During secret rotation, `RAZORPAY_WEBHOOK_PREVIOUS_SECRET` can temporarily validate retries signed with the former secret.
+
+The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, and `subscription.halted`. Other correctly signed events are safely recorded as unsupported. This endpoint only authenticates, normalizes, and persists events; reconciliation and recovery processing are intentionally not implemented yet.
+
 Run the tests with:
 
 ```powershell

@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     database_url: PostgresDsn
     test_database_url: PostgresDsn | None = None
+    razorpay_webhook_secret: SecretStr | None = None
+    razorpay_webhook_previous_secret: SecretStr | None = None
     environment: str = "development"
     debug: bool = False
 

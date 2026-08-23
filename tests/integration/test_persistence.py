@@ -1,5 +1,6 @@
 """PostgreSQL integration tests for ARC's core persistence schema."""
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from arc.domain.enums import CaseState, EventProcessingStatus
 from arc.domain.models import CaseEvent, MerchantPolicy, PaymentCase, WebhookEvent
+from arc.integrations.razorpay import hash_raw_body
 from arc.persistence import (
     RecordEventResult,
     append_case_event,
@@ -40,13 +42,16 @@ def _record_event(
     event_id: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> RecordEventResult:
+    event_payload = payload or {"event": "payment.failed"}
+    raw_body = json.dumps(event_payload, separators=(",", ":")).encode("utf-8")
     return record_event_once(
         session,
         razorpay_event_id=event_id or f"evt_{uuid4().hex}",
         event_type="payment.failed",
         account_id="account_test",
         payment_id=f"pay_{uuid4().hex}",
-        raw_payload=payload or {"event": "payment.failed"},
+        raw_payload=event_payload,
+        raw_body_sha256=hash_raw_body(raw_body),
         signature_verified=True,
     )
 
@@ -68,6 +73,15 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     }
     assert isinstance(webhook_columns["raw_payload"]["type"], JSONB)
     assert webhook_columns["received_at"]["type"].timezone is True
+    assert webhook_columns["raw_body_sha256"]["nullable"] is True
+
+    webhook_checks = {
+        constraint["name"]
+        for constraint in database_inspector.get_check_constraints(
+            "webhook_events"
+        )
+    }
+    assert "ck_webhook_events_raw_body_sha256_hex" in webhook_checks
 
     webhook_indexes = {
         index["name"] for index in database_inspector.get_indexes("webhook_events")
@@ -84,6 +98,7 @@ def test_webhook_event_can_be_inserted(db_session: Session) -> None:
     assert result.duplicate is False
     assert result.event.processing_status is EventProcessingStatus.RECEIVED
     assert result.event.payload_hash == hash_payload(result.event.raw_payload)
+    assert result.event.raw_body_sha256 is not None
 
 
 def test_duplicate_event_is_stored_exactly_once_without_overwrite(
@@ -109,6 +124,7 @@ def test_duplicate_event_is_stored_exactly_once_without_overwrite(
     assert first.event.id == duplicate.event.id
     assert duplicate.inserted is False
     assert duplicate.duplicate is True
+    assert duplicate.integrity_mismatch is True
     assert stored_count == 1
     assert duplicate.event.raw_payload == original_payload
 
@@ -220,6 +236,15 @@ def test_webhook_payload_cannot_be_updated(db_session: Session) -> None:
     db_session.commit()
 
     result.event.raw_payload = {"event": "payment.captured"}
+    with pytest.raises(ValueError, match="immutable"):
+        db_session.flush()
+
+
+def test_webhook_raw_body_hash_cannot_be_updated(db_session: Session) -> None:
+    result = _record_event(db_session)
+    db_session.commit()
+
+    result.event.raw_body_sha256 = "0" * 64
     with pytest.raises(ValueError, match="immutable"):
         db_session.flush()
 

@@ -49,6 +49,11 @@ class WebhookEvent(Base):
             name="payload_hash_sha256_hex",
         ),
         CheckConstraint(
+            "raw_body_sha256 IS NULL OR "
+            "raw_body_sha256 ~ '^[0-9a-f]{64}$'",
+            name="raw_body_sha256_hex",
+        ),
+        CheckConstraint(
             "processing_status IN "
             "('RECEIVED', 'PROCESSING', 'PROCESSED', 'FAILED', 'UNSUPPORTED')",
             name="event_processing_status",
@@ -68,6 +73,10 @@ class WebhookEvent(Base):
     customer_id: Mapped[str | None] = mapped_column(String(100))
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_body_sha256: Mapped[str | None] = mapped_column(
+        String(64),
+        comment="Exact request-body SHA-256; null only for pre-migration rows",
+    )
     signature_verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -94,6 +103,7 @@ _IMMUTABLE_EVENT_FIELDS = (
     "customer_id",
     "raw_payload",
     "payload_hash",
+    "raw_body_sha256",
     "signature_verified",
     "received_at",
 )
