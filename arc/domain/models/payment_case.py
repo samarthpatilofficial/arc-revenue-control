@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from arc.domain.models.case_event import CaseEvent
     from arc.domain.models.policy_decision import PolicyDecision
     from arc.domain.models.recovery_action import RecoveryActionRecord
+    from arc.domain.models.recovery_outcome import (
+        RecoveryAttribution,
+        RecoveryOutcomeObservation,
+    )
     from arc.domain.models.strategy_proposal import StrategyProposal
 
 case_state_type = SqlEnum(
@@ -222,4 +226,12 @@ class PaymentCase(Base):
     recovery_actions: Mapped[list["RecoveryActionRecord"]] = relationship(
         back_populates="case",
         order_by="RecoveryActionRecord.created_at",
+    )
+    outcome_observations: Mapped[list["RecoveryOutcomeObservation"]] = relationship(
+        back_populates="case",
+        order_by="RecoveryOutcomeObservation.observed_at",
+    )
+    attributions: Mapped[list["RecoveryAttribution"]] = relationship(
+        back_populates="case",
+        order_by="RecoveryAttribution.attributed_at",
     )

@@ -16,7 +16,10 @@ from arc.integrations.razorpay.payment_links import (
     PaymentLinkUncertainError,
     PaymentLinkUnavailableError,
     RazorpayPaymentLinkClient,
+    derive_razorpay_provider_mode,
 )
+from arc.config import Settings
+from arc.domain.enums import ProviderMode
 
 
 def _payload(**overrides: object) -> dict[str, object]:
@@ -24,6 +27,7 @@ def _payload(**overrides: object) -> dict[str, object]:
         "id": "plink_test_123",
         "reference_id": "arc_0123456789abcdef0123456789abcdef",
         "amount": 1000,
+        "amount_paid": 0,
         "currency": "INR",
         "status": "created",
         "short_url": "https://rzp.io/i/test123",
@@ -156,6 +160,102 @@ def test_cancel_uses_bounded_cancellation_endpoint() -> None:
         "path": "/v1/payment_links/plink_test_123/cancel",
     }
     assert result.status == "cancelled"
+
+
+def test_fetch_by_id_parses_paid_captured_projection_and_ignores_pii() -> None:
+    observed: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["method"] = request.method
+        observed["path"] = request.url.path
+        return httpx.Response(
+            200,
+            json=_payload(
+                status="paid",
+                amount_paid=1000,
+                updated_at=1_725_000_100,
+                customer={"name": "Must not enter projection"},
+                payments=[
+                    {
+                        "payment_id": "pay_captured_test",
+                        "amount": 1000,
+                        "status": "captured",
+                        "method": "card",
+                        "created_at": 1_725_000_000,
+                    }
+                ],
+            ),
+        )
+
+    with _client(handler) as client:
+        result = client.fetch_by_id("plink_test_123")
+
+    assert observed == {
+        "method": "GET",
+        "path": "/v1/payment_links/plink_test_123",
+    }
+    assert result.amount_paid == 1000
+    assert result.payments[0].payment_id == "pay_captured_test"
+    assert "customer" not in result.model_dump()
+
+
+@pytest.mark.parametrize("status", ["created", "issued", "expired", "cancelled"])
+def test_fetch_preserves_supported_read_statuses(status: str) -> None:
+    with _client(
+        lambda _request: httpx.Response(200, json=_payload(status=status))
+    ) as client:
+        result = client.fetch_by_id("plink_test_123")
+
+    assert result.status == status
+
+
+def test_fetch_preserves_unknown_future_status() -> None:
+    with _client(
+        lambda _request: httpx.Response(
+            200, json=_payload(status="future_provider_state")
+        )
+    ) as client:
+        result = client.fetch_by_id("plink_test_123")
+
+    assert result.status == "future_provider_state"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"amount": "1000"},
+        {"payments": [{"payment_id": "pay_bad", "amount": "1000", "status": "captured"}]},
+        {"payments": [{"payment_id": "pay_bad", "amount": 1000}]},
+    ],
+)
+def test_fetch_rejects_malformed_financial_evidence(
+    overrides: dict[str, object],
+) -> None:
+    with _client(
+        lambda _request: httpx.Response(200, json=_payload(**overrides))
+    ) as client:
+        with pytest.raises(PaymentLinkInvalidResponseError):
+            client.fetch_by_id("plink_test_123")
+
+
+@pytest.mark.parametrize(
+    ("key_id", "expected"),
+    [
+        ("rzp_test_ci_only", ProviderMode.TEST),
+        ("rzp_live_ci_only", ProviderMode.LIVE),
+    ],
+)
+def test_provider_mode_is_derived_without_persisting_key(
+    key_id: str,
+    expected: ProviderMode,
+) -> None:
+    settings = Settings(
+        database_url="postgresql+psycopg://arc:test@localhost:5432/arc_test",
+        razorpay_key_id=key_id,
+        _env_file=None,
+    )
+
+    assert derive_razorpay_provider_mode(settings) is expected
 
 
 @pytest.mark.parametrize("status", [401, 403])

@@ -3,19 +3,21 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from arc.domain.enums import EventProcessingStatus
-from arc.domain.models import WebhookEvent
+from arc.domain.enums import EventProcessingStatus, OutcomeObservationSource
+from arc.domain.models import RecoveryActionRecord, WebhookEvent
 from arc.integrations.razorpay import (
     PaymentSnapshot,
     RazorpayClientError,
     RazorpayEntityReader,
     SubscriptionSnapshot,
+    extract_payment_link_webhook_reference,
 )
 from arc.integrations.razorpay.webhook_payload import SUPPORTED_RAZORPAY_EVENTS
 from arc.persistence import CasePersistenceError
@@ -25,6 +27,9 @@ from arc.reconciliation.errors import (
 )
 from arc.reconciliation.payment import reconcile_payment
 from arc.reconciliation.subscription import reconcile_subscription
+
+if TYPE_CHECKING:
+    from arc.outcomes.service import RecoveryOutcomeObserver
 
 MAX_PROCESSING_ERROR_LENGTH = 256
 PROCESSING_LEASE_SECONDS = 120
@@ -56,6 +61,7 @@ class _ClaimedEvent:
     subscription_id: str | None
     customer_id: str | None
     processing_attempt_count: int
+    raw_payload: dict[str, object]
 
 
 class WebhookEventProcessor:
@@ -66,10 +72,12 @@ class WebhookEventProcessor:
         *,
         session_factory: Callable[[], Session],
         razorpay_client: RazorpayEntityReader,
+        recovery_outcome_observer: "RecoveryOutcomeObserver | None" = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self._session_factory = session_factory
         self._razorpay_client = razorpay_client
+        self._recovery_outcome_observer = recovery_outcome_observer
         self._clock = clock
 
     def process_webhook_event(self, event_id: UUID) -> WebhookProcessingResult:
@@ -80,6 +88,8 @@ class WebhookEventProcessor:
             return claim
 
         try:
+            if claim.event_type.startswith("payment_link."):
+                return self._process_payment_link_event(claim)
             snapshot = self._fetch_authoritative_entity(claim)
             return self._apply_reconciliation(claim, snapshot)
         except RazorpayClientError as error:
@@ -165,9 +175,114 @@ class WebhookEventProcessor:
                 subscription_id=event.subscription_id,
                 customer_id=event.customer_id,
                 processing_attempt_count=event.processing_attempt_count,
+                raw_payload=dict(event.raw_payload),
             )
             session.commit()
             return claimed
+
+    def _process_payment_link_event(
+        self,
+        claimed: _ClaimedEvent,
+    ) -> WebhookProcessingResult:
+        reference = extract_payment_link_webhook_reference(
+            claimed.raw_payload
+        )
+        conditions = []
+        if reference.payment_link_id is not None:
+            conditions.append(
+                RecoveryActionRecord.external_reference_id
+                == reference.payment_link_id
+            )
+        if reference.reference_id is not None:
+            conditions.append(
+                RecoveryActionRecord.external_reference
+                == reference.reference_id
+            )
+        if not conditions:
+            raise WebhookProcessingError(
+                "Payment Link webhook is missing stable identifiers"
+            )
+
+        with self._session_factory() as session:
+            matches = list(
+                session.scalars(
+                    select(RecoveryActionRecord).where(or_(*conditions))
+                )
+            )
+        unique_matches = {match.id: match for match in matches}
+        if not unique_matches:
+            return self._mark_processed_without_case(
+                claimed,
+                "UNMATCHED_RECOVERY_PAYMENT_LINK_EVENT",
+            )
+        if len(unique_matches) != 1:
+            raise WebhookProcessingError(
+                "Payment Link webhook action match is ambiguous"
+            )
+
+        if self._recovery_outcome_observer is None:
+            from arc.outcomes.service import RecoveryOutcomeService
+
+            observer: RecoveryOutcomeObserver = RecoveryOutcomeService(
+                session_factory=self._session_factory
+            )
+        else:
+            observer = self._recovery_outcome_observer
+        outcome = observer.observe_recovery_action(
+            next(iter(unique_matches)),
+            source=OutcomeObservationSource.WEBHOOK_TRIGGERED,
+        )
+        return self._mark_processed_without_case(
+            claimed,
+            outcome.reason_code,
+            case_id=outcome.case_id,
+        )
+
+    def _mark_processed_without_case(
+        self,
+        claimed: _ClaimedEvent,
+        reason_code: str,
+        *,
+        case_id: UUID | None = None,
+    ) -> WebhookProcessingResult:
+        with self._session_factory() as session:
+            event = session.scalar(
+                select(WebhookEvent)
+                .where(WebhookEvent.id == claimed.id)
+                .with_for_update()
+            )
+            if event is None:
+                raise WebhookEventNotFoundError("Webhook event was not found")
+            if event.processing_status is EventProcessingStatus.PROCESSED:
+                return WebhookProcessingResult(
+                    event_id=event.id,
+                    processing_status=EventProcessingStatus.PROCESSED,
+                    case_id=case_id,
+                    reason_code="EVENT_ALREADY_PROCESSED",
+                    idempotent=True,
+                )
+            if event.processing_attempt_count != claimed.processing_attempt_count:
+                return WebhookProcessingResult(
+                    event_id=event.id,
+                    processing_status=event.processing_status,
+                    case_id=None,
+                    reason_code="EVENT_PROCESSING_CLAIM_SUPERSEDED",
+                    idempotent=True,
+                )
+            if event.processing_status is not EventProcessingStatus.PROCESSING:
+                raise WebhookProcessingError(
+                    "Webhook event is not available for outcome processing"
+                )
+            event.processing_status = EventProcessingStatus.PROCESSED
+            event.processed_at = self._clock()
+            event.processing_error = None
+            session.commit()
+            return WebhookProcessingResult(
+                event_id=event.id,
+                processing_status=EventProcessingStatus.PROCESSED,
+                case_id=case_id,
+                reason_code=reason_code,
+            )
 
     def _fetch_authoritative_entity(
         self,

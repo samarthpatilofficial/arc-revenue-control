@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     from arc.domain.models.approval_request import ApprovalRequest
     from arc.domain.models.payment_case import PaymentCase
     from arc.domain.models.policy_decision import PolicyDecision
+    from arc.domain.models.recovery_outcome import (
+        RecoveryAttribution,
+        RecoveryOutcomeObservation,
+    )
     from arc.domain.models.strategy_proposal import StrategyProposal
 
 
@@ -188,4 +192,11 @@ class RecoveryActionRecord(Base):
     )
     approval_request: Mapped["ApprovalRequest | None"] = relationship(
         back_populates="recovery_actions"
+    )
+    outcome_observations: Mapped[list["RecoveryOutcomeObservation"]] = relationship(
+        back_populates="recovery_action",
+        order_by="RecoveryOutcomeObservation.observed_at",
+    )
+    attribution: Mapped["RecoveryAttribution | None"] = relationship(
+        back_populates="recovery_action", uselist=False
     )

@@ -1,4 +1,4 @@
-"""Write-scoped Razorpay Standard Payment Link client for governed execution."""
+"""Governed Razorpay Standard Payment Link write and outcome-read client."""
 
 from typing import Any, Literal, Protocol, Self
 from urllib.parse import quote
@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from arc.config import Settings
+from arc.domain.enums import ProviderMode
 from arc.integrations.razorpay.client import (
     DEFAULT_RAZORPAY_API_BASE_URL,
     DEFAULT_RAZORPAY_TIMEOUT,
@@ -22,7 +23,7 @@ from arc.integrations.razorpay.client import (
 
 PAYMENT_LINK_DESCRIPTION = "ARC recovery payment"
 PAYMENT_LINK_STATUSES = frozenset(
-    {"created", "partially_paid", "expired", "cancelled", "paid"}
+    {"created", "issued", "partially_paid", "expired", "cancelled", "paid"}
 )
 
 
@@ -93,6 +94,24 @@ class PaymentLinkCreateRequest(BaseModel):
         return value.strip().upper()
 
 
+class CapturedPaymentProjection(BaseModel):
+    """PII-free captured-payment evidence embedded in a Payment Link read."""
+
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    payment_id: str = Field(min_length=1, max_length=100)
+    amount: int = Field(gt=0)
+    status: str = Field(min_length=1, max_length=64)
+    method: str | None = Field(default=None, max_length=64)
+    created_at: int | None = Field(default=None, ge=0)
+    payment_link_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("status")
+    @classmethod
+    def normalize_status(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class PaymentLinkSnapshot(BaseModel):
     """Only provider response fields ARC is permitted to retain."""
 
@@ -101,10 +120,15 @@ class PaymentLinkSnapshot(BaseModel):
     id: str = Field(min_length=1, max_length=100)
     reference_id: str = Field(min_length=1, max_length=40)
     amount: int = Field(gt=0)
+    amount_paid: int = Field(ge=0)
     currency: str = Field(min_length=3, max_length=3)
     status: str = Field(min_length=1, max_length=64)
     short_url: AnyHttpUrl
-    expire_by: int = Field(ge=0)
+    expire_by: int | None = Field(default=None, ge=0)
+    expired_at: int | None = Field(default=None, ge=0)
+    cancelled_at: int | None = Field(default=None, ge=0)
+    updated_at: int | None = Field(default=None, ge=0)
+    payments: list[CapturedPaymentProjection] = Field(default_factory=list)
 
     @field_validator("currency")
     @classmethod
@@ -113,11 +137,13 @@ class PaymentLinkSnapshot(BaseModel):
 
     @field_validator("status")
     @classmethod
-    def validate_status(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in PAYMENT_LINK_STATUSES:
-            raise ValueError("Payment Link status is not recognized")
-        return normalized
+    def normalize_status(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("payments", mode="before")
+    @classmethod
+    def normalize_missing_payments(cls, value: object) -> object:
+        return [] if value is None else value
 
 
 class _PaymentLinkCollection(BaseModel):
@@ -127,7 +153,7 @@ class _PaymentLinkCollection(BaseModel):
 
 
 class PaymentLinkGateway(Protocol):
-    """Narrow write integration dependency used by the executor."""
+    """Narrow Payment Link dependency used by execution and observation."""
 
     def lookup_by_reference(
         self,
@@ -141,9 +167,11 @@ class PaymentLinkGateway(Protocol):
 
     def cancel(self, payment_link_id: str) -> PaymentLinkSnapshot: ...
 
+    def fetch_by_id(self, payment_link_id: str) -> PaymentLinkSnapshot: ...
+
 
 class RazorpayPaymentLinkClient:
-    """Client exposing only lookup, create, and safe cancellation."""
+    """Client exposing lookup, create, safe cancellation, and fetch by id."""
 
     def __init__(
         self,
@@ -274,12 +302,31 @@ class RazorpayPaymentLinkClient:
             )
         return snapshot
 
+    def fetch_by_id(self, payment_link_id: str) -> PaymentLinkSnapshot:
+        identifier = _bounded_identifier(payment_link_id, maximum=100)
+        response = self._request(
+            "GET",
+            f"/v1/payment_links/{quote(identifier, safe='')}",
+            operation="fetch",
+        )
+        try:
+            snapshot = PaymentLinkSnapshot.model_validate(response.json())
+        except (ValueError, TypeError, ValidationError):
+            raise PaymentLinkInvalidResponseError(
+                "Razorpay returned an invalid Payment Link fetch"
+            ) from None
+        if snapshot.id != identifier:
+            raise PaymentLinkInvalidResponseError(
+                "Razorpay returned a mismatched Payment Link fetch"
+            )
+        return snapshot
+
     def _request(
         self,
         method: str,
         path: str,
         *,
-        operation: Literal["lookup", "create", "cancel"],
+        operation: Literal["lookup", "create", "cancel", "fetch"],
         params: dict[str, str] | None = None,
         json: dict[str, Any] | None = None,
     ) -> httpx.Response:
@@ -323,7 +370,7 @@ def _bounded_identifier(identifier: str, *, maximum: int) -> str:
 def _raise_for_status(
     status_code: int,
     *,
-    operation: Literal["lookup", "create", "cancel"],
+    operation: Literal["lookup", "create", "cancel", "fetch"],
 ) -> None:
     if 200 <= status_code < 300:
         return
@@ -345,4 +392,21 @@ def _raise_for_status(
         )
     raise PaymentLinkRejectedError(
         "Razorpay rejected the Payment Link request"
+    )
+
+
+def derive_razorpay_provider_mode(settings: Settings) -> ProviderMode:
+    """Derive mode from the private key prefix without retaining the key."""
+
+    if settings.razorpay_key_id is None:
+        raise PaymentLinkConfigurationError(
+            "Razorpay Payment Link credentials are not configured"
+        )
+    key_id = settings.razorpay_key_id.get_secret_value()
+    if key_id.startswith("rzp_test_"):
+        return ProviderMode.TEST
+    if key_id.startswith("rzp_live_"):
+        return ProviderMode.LIVE
+    raise PaymentLinkConfigurationError(
+        "Razorpay credential mode could not be determined safely"
     )

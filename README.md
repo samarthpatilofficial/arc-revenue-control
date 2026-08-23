@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository contains ARC's backend financial core and deterministic authorization path: a FastAPI application, PostgreSQL persistence, secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded recovery-strategy proposals, and merchant policy evaluation.
+This repository contains ARC's backend financial core and governed recovery loop: secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded strategy proposals, merchant policy authorization, crash-safe Payment Link execution, authoritative outcome observation, and strict recovered-revenue attribution.
 
 ## Local setup
 
@@ -42,7 +42,7 @@ python -m alembic upgrade head
 python -m uvicorn services.api.main:app --reload
 ```
 
-The migrations create the event/case ledger, merchant policies, bounded strategy proposals, and append-friendly policy decisions.
+The migrations create the event/case ledger, merchant policies, bounded strategy and policy records, governed recovery actions, outcome observations, and recovery attributions.
 
 The API is available at `http://localhost:8000`. Its liveness endpoint is:
 
@@ -60,7 +60,7 @@ POST /webhooks/razorpay
 
 ARC verifies `X-Razorpay-Signature` using HMAC-SHA256 over the exact raw request bytes before parsing JSON. `x-razorpay-event-id` is required and protected by database uniqueness. During secret rotation, `RAZORPAY_WEBHOOK_PREVIOUS_SECRET` can temporarily validate retries signed with the former secret.
 
-The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, and `subscription.halted`. Other correctly signed events are safely recorded as unsupported. The HTTP endpoint only authenticates, normalizes, and persists events so ingress remains fast.
+The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, `subscription.halted`, `payment_link.paid`, `payment_link.cancelled`, `payment_link.expired`, and `payment_link.partially_paid`. Other correctly signed events are safely recorded as unsupported. The HTTP endpoint only authenticates, normalizes, and persists events so ingress remains fast.
 
 ARC treats a webhook as a signal, not current financial truth. A separate application service reconciles supported stored events using only these read operations:
 
@@ -77,10 +77,10 @@ authoritative reconciliation -> precondition gate -> deterministic diagnosis
 
 A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so ARC does not compete with Razorpay retries; and a `halted` subscription is eligible for deterministic diagnosis because automatic retries are exhausted. Payment diagnosis uses structured Razorpay reason, source, and step fields in that precedence order, with bounded future-tolerant fallbacks.
 
-Eligible `DIAGNOSED` cases can now move through the governed recovery path:
+Eligible `DIAGNOSED` cases can now move through the governed recovery loop:
 
 ```text
-reconcile -> eligibility -> diagnose -> strategy -> authorize -> approve if required -> execute bounded action -> wait for outcome
+detect -> reconcile -> diagnose -> decide -> authorize -> execute -> observe -> measure
 ```
 
 AI proposals use the OpenAI Responses API with strict Structured Outputs and the fixed action vocabulary `NO_ACTION`, `WAIT`, `REQUEST_RETRY`, `CREATE_RECOVERY_LINK`, `REQUEST_PAYMENT_METHOD_UPDATE`, and `ESCALATE_TO_HUMAN`. Manual-review and merchant-fix dispositions bypass AI and produce deterministic rule proposals. Strategy generation sends no customer PII or external payment/subscription identifiers, and a post-inference database fence discards output if reconciled facts changed while the model was running.
@@ -93,7 +93,11 @@ Merchant authorization is deterministic. It validates the action allowlist, auto
 
 Standard Razorpay Payment Link creation is ARC's first real external recovery side effect. `CREATE_RECOVERY_LINK` uses a stable `arc_<action-uuid>` reference, disables partial payments, reminders, SMS, and email, sends no customer PII, and recovers uncertain create outcomes through lookup-before-create. A PostgreSQL action ledger provides one row per policy decision, execution leases, exact-once counters, sanitized provider projections, and post-request compensation when financial truth changes during creation. `WAIT`, `NO_ACTION`, and `ESCALATE_TO_HUMAN` are bounded internal actions. `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` fail safely as not implemented because ARC has no valid Razorpay retry or customer-delivery executor for them.
 
-There is no public approval UI or production operator identity system yet. ARC does not capture or refund payments, send customer communications, observe Payment Link outcomes, attribute recovered revenue, expose a frontend, or claim that creating a link recovered money. Those remain subsequent tasks.
+Creating a Payment Link is not recovered revenue. A Payment Link webhook is only a trigger: ARC matches it to an existing governed action and then performs an authoritative `GET /v1/payment_links/{id}`. Revenue is attributed only when the link id, stable reference, amount, paid amount, currency, and exactly one captured payment all match the original action and case. Partial, ambiguous, conflicting, or unknown evidence is escalated for review. Evidence fingerprints, action uniqueness, and provider-payment uniqueness prevent duplicate events or repeated polls from double-counting revenue.
+
+Every attribution is explicitly tagged `TEST` or `LIVE` from private credential metadata; metrics require an explicit provider-mode and currency scope, so test-mode revenue is never silently aggregated with live merchant revenue. No customer object, Payment Link URL, raw provider response, or credential is copied into outcome or attribution storage.
+
+There is no public approval UI, automatic polling scheduler, frontend, or production operator identity system yet. ARC does not capture or refund payments, send customer communications, support partial-payment attribution, or infer recovery attribution from generic `payment.captured` events.
 
 Run the tests with:
 

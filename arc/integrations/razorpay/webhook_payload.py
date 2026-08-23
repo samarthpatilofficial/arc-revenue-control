@@ -10,6 +10,10 @@ SUPPORTED_RAZORPAY_EVENTS = frozenset(
         "payment.captured",
         "subscription.pending",
         "subscription.halted",
+        "payment_link.paid",
+        "payment_link.cancelled",
+        "payment_link.expired",
+        "payment_link.partially_paid",
     }
 )
 
@@ -34,6 +38,14 @@ class NormalizedWebhookEvent:
         """Return whether ARC recognizes this event for later processing."""
 
         return self.event_type in SUPPORTED_RAZORPAY_EVENTS
+
+
+@dataclass(frozen=True, slots=True)
+class PaymentLinkWebhookReference:
+    """Minimal non-PII routing fields from a signed Payment Link event."""
+
+    payment_link_id: str | None
+    reference_id: str | None
 
 
 def _entity(payload: Mapping[str, Any], entity_name: str) -> Mapping[str, Any]:
@@ -89,4 +101,18 @@ def normalize_webhook_payload(payload: object) -> NormalizedWebhookEvent:
         ),
         customer_id=customer_id,
         raw_payload=dict(payload),
+    )
+
+
+def extract_payment_link_webhook_reference(
+    payload: object,
+) -> PaymentLinkWebhookReference:
+    """Extract only stable action identifiers, ignoring all customer data."""
+
+    if not isinstance(payload, Mapping):
+        return PaymentLinkWebhookReference(None, None)
+    payment_link = _entity(payload, "payment_link")
+    return PaymentLinkWebhookReference(
+        payment_link_id=_identifier(payment_link.get("id")),
+        reference_id=_identifier(payment_link.get("reference_id"), max_length=40),
     )

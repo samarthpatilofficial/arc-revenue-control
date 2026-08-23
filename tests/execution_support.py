@@ -34,13 +34,14 @@ from tests.reconciliation_support import (
 class StubPaymentLinkGateway:
     """Offline provider fake with hooks for crash and capture races."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, payment_link_id: str = "plink_arc_test") -> None:
         self.calls: list[tuple[str, str]] = []
         self.requests: list[PaymentLinkCreateRequest] = []
         self.lookup_results: list[PaymentLinkSnapshot] | Exception = []
         self.create_error: BaseException | None = None
         self.cancel_error: BaseException | None = None
         self.on_create: Callable[[], None] | None = None
+        self.payment_link_id = payment_link_id
 
     def lookup_by_reference(
         self,
@@ -61,7 +62,10 @@ class StubPaymentLinkGateway:
             self.on_create()
         if self.create_error is not None:
             raise self.create_error
-        return payment_link_snapshot(request=request)
+        return payment_link_snapshot(
+            request=request,
+            payment_link_id=self.payment_link_id,
+        )
 
     def cancel(self, payment_link_id: str) -> PaymentLinkSnapshot:
         self.calls.append(("cancel", payment_link_id))
@@ -73,6 +77,14 @@ class StubPaymentLinkGateway:
             payment_link_id=payment_link_id,
             status="cancelled",
         )
+
+    def fetch_by_id(self, payment_link_id: str) -> PaymentLinkSnapshot:
+        self.calls.append(("fetch", payment_link_id))
+        if isinstance(self.lookup_results, Exception):
+            raise self.lookup_results
+        if len(self.lookup_results) != 1:
+            raise LookupError("Synthetic Payment Link fetch is unavailable")
+        return self.lookup_results[0]
 
 
 def payment_link_snapshot(
@@ -86,6 +98,7 @@ def payment_link_snapshot(
         "id": payment_link_id,
         "reference_id": request.reference_id,
         "amount": request.amount,
+        "amount_paid": 0,
         "currency": request.currency,
         "status": status,
         "short_url": "https://rzp.io/i/arc-test",
@@ -118,7 +131,12 @@ def prepare_policy_decision(
         payment_id=payment_id,
     )
     processor(session_factory, razorpay).process_webhook_event(event_id)
-    payment_case = load_cases(session_factory)[0]
+    with session_factory() as session:
+        payment_case = session.scalar(
+            select(PaymentCase).where(PaymentCase.payment_id == payment_id)
+        )
+        assert payment_case is not None
+        session.expunge(payment_case)
     assert payment_case.last_reconciled_at is not None
     assessed_at = payment_case.last_reconciled_at + timedelta(seconds=1)
     CaseAssessmentService(
@@ -181,7 +199,13 @@ def prepare_policy_decision(
     }
     policy_values.update(policy_overrides or {})
     with session_factory() as session:
-        session.add(MerchantPolicy(**policy_values))
+        existing_policy = session.scalar(
+            select(MerchantPolicy).where(
+                MerchantPolicy.merchant_id == merchant_id
+            )
+        )
+        if existing_policy is None:
+            session.add(MerchantPolicy(**policy_values))
         session.commit()
 
     MerchantAuthorizationService(

@@ -1,4 +1,4 @@
-"""Razorpay webhook and read-only REST integration primitives."""
+"""Razorpay webhook, authoritative-read, and governed-write primitives."""
 
 from arc.integrations.razorpay.client import (
     RECOGNIZED_PAYMENT_STATUSES,
@@ -18,6 +18,7 @@ from arc.integrations.razorpay.client import (
 from arc.integrations.razorpay.payment_links import (
     PAYMENT_LINK_DESCRIPTION,
     PAYMENT_LINK_STATUSES,
+    CapturedPaymentProjection,
     PaymentLinkAuthenticationError,
     PaymentLinkConfigurationError,
     PaymentLinkCreateRequest,
@@ -31,12 +32,15 @@ from arc.integrations.razorpay.payment_links import (
     PaymentLinkUnavailableError,
     PaymentLinkUncertainError,
     RazorpayPaymentLinkClient,
+    derive_razorpay_provider_mode,
 )
 
 from arc.integrations.razorpay.webhook_payload import (
     SUPPORTED_RAZORPAY_EVENTS,
     InvalidWebhookPayload,
     NormalizedWebhookEvent,
+    PaymentLinkWebhookReference,
+    extract_payment_link_webhook_reference,
     normalize_webhook_payload,
 )
 from arc.integrations.razorpay.webhook_security import (
@@ -51,8 +55,10 @@ __all__ = [
     "RECOGNIZED_PAYMENT_STATUSES",
     "RECOGNIZED_SUBSCRIPTION_STATUSES",
     "SUPPORTED_RAZORPAY_EVENTS",
+    "CapturedPaymentProjection",
     "InvalidWebhookPayload",
     "NormalizedWebhookEvent",
+    "PaymentLinkWebhookReference",
     "PaymentSnapshot",
     "PaymentLinkAuthenticationError",
     "PaymentLinkConfigurationError",
@@ -77,6 +83,8 @@ __all__ = [
     "RazorpayRateLimitError",
     "RazorpayUnavailableError",
     "SubscriptionSnapshot",
+    "derive_razorpay_provider_mode",
+    "extract_payment_link_webhook_reference",
     "hash_raw_body",
     "normalize_webhook_payload",
     "verify_webhook_signature",

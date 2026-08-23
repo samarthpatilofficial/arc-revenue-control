@@ -61,6 +61,17 @@ def _payload(
                     }
                 }
             }
+        elif event_type.startswith("payment_link."):
+            payload["contains"] = ["payment_link"]
+            payload["payload"] = {
+                "payment_link": {
+                    "entity": {
+                        "id": "plink_test",
+                        "reference_id": "arc_test_reference",
+                        "status": event_type.removeprefix("payment_link."),
+                    }
+                }
+            }
     return payload
 
 
@@ -163,6 +174,25 @@ def test_valid_signed_payment_failed_inserts_once(
     assert stored.account_id == "acc_test"
     assert stored.payment_id == "pay_test"
     assert stored.customer_id == "cust_test"
+    assert stored.processing_status is EventProcessingStatus.RECEIVED
+
+
+def test_valid_signed_payment_link_paid_is_accepted_for_processing(
+    webhook_client: TestClient,
+    migrated_engine: Engine,
+) -> None:
+    body = _raw_body("payment_link.paid")
+
+    response = webhook_client.post(
+        "/webhooks/razorpay",
+        content=body,
+        headers=_headers(body, "evt_payment_link_paid"),
+    )
+
+    assert response.status_code == 202
+    stored = _stored_event(migrated_engine, "evt_payment_link_paid")
+    assert stored is not None
+    assert stored.event_type == "payment_link.paid"
     assert stored.processing_status is EventProcessingStatus.RECEIVED
 
 

@@ -6,6 +6,10 @@ from arc.domain.models.merchant_policy import MerchantPolicy
 from arc.domain.models.payment_case import PaymentCase
 from arc.domain.models.policy_decision import PolicyDecision
 from arc.domain.models.recovery_action import RecoveryActionRecord
+from arc.domain.models.recovery_outcome import (
+    RecoveryAttribution,
+    RecoveryOutcomeObservation,
+)
 from arc.domain.models.strategy_proposal import StrategyProposal
 from arc.domain.models.webhook_event import WebhookEvent
 
@@ -16,6 +20,8 @@ __all__ = [
     "PaymentCase",
     "PolicyDecision",
     "RecoveryActionRecord",
+    "RecoveryAttribution",
+    "RecoveryOutcomeObservation",
     "StrategyProposal",
     "WebhookEvent",
 ]

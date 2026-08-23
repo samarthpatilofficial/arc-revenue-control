@@ -115,3 +115,27 @@ class RecoveryExecutionStatus(StrEnum):
     INDETERMINATE = "INDETERMINATE"
     CANCELLED = "CANCELLED"
     COMPENSATION_REQUIRED = "COMPENSATION_REQUIRED"
+
+
+class ProviderMode(StrEnum):
+    """Financial environment attached to provider evidence and attribution."""
+
+    TEST = "TEST"
+    LIVE = "LIVE"
+
+
+class OutcomeObservationSource(StrEnum):
+    """Bounded trigger source for an authoritative outcome read."""
+
+    POLL = "POLL"
+    WEBHOOK_TRIGGERED = "WEBHOOK_TRIGGERED"
+
+
+class RecoveryOutcomeStatus(StrEnum):
+    """Fail-safe classification of authoritative recovery evidence."""
+
+    PENDING = "PENDING"
+    RECOVERED = "RECOVERED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
