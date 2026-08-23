@@ -1,6 +1,7 @@
 """Read-only SQLAlchemy projections that never return persistence entities."""
 
-from collections.abc import Iterable
+import re
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import TypeVar
 
@@ -11,10 +12,12 @@ from arc.demo.markers import DEMO_EVENT_SOURCE, DEMO_EVENT_TYPE
 from arc.domain.enums import (
     ApprovalStatus,
     CaseState,
+    EligibilityDecision,
     FailureCategory,
     PolicyDecisionResult,
     ProviderMode,
     RecoveryExecutionStatus,
+    RecoveryDisposition,
     RecoveryOutcomeStatus,
     StrategySource,
 )
@@ -168,7 +171,7 @@ def get_case_timeline(
 
     mapped_detection = False
     for event in payment_case.case_events:
-        normalized = _timeline_from_case_event(event, payment_case, origin)
+        normalized = _timeline_from_case_event(event, origin)
         if normalized is None:
             continue
         mapped_detection = mapped_detection or event.event_type == "CASE_DETECTED"
@@ -652,10 +655,44 @@ _TIMELINE_STAGE_ORDER = {
     "ATTRIBUTION": 10,
 }
 
+_ELIGIBILITY_TIMELINE_VALUES = frozenset(
+    decision.value for decision in EligibilityDecision
+)
+_FAILURE_CATEGORY_TIMELINE_VALUES = frozenset(
+    category.value for category in FailureCategory
+)
+_RECOVERY_DISPOSITION_TIMELINE_VALUES = frozenset(
+    disposition.value for disposition in RecoveryDisposition
+)
+_TIMELINE_REASON_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,99}")
+
+
+def _bounded_event_value(
+    event_data: Mapping[str, object],
+    key: str,
+    allowed_values: frozenset[str],
+) -> str | None:
+    value = event_data.get(key)
+    if not isinstance(value, str) or value not in allowed_values:
+        return None
+    return value
+
+
+def _bounded_event_reason(
+    event_data: Mapping[str, object],
+    key: str,
+) -> str | None:
+    value = event_data.get(key)
+    if (
+        not isinstance(value, str)
+        or _TIMELINE_REASON_CODE.fullmatch(value) is None
+    ):
+        return None
+    return value
+
 
 def _timeline_from_case_event(
     event: CaseEvent,
-    payment_case: PaymentCase,
     origin: DataOrigin | None,
 ) -> TimelineItem | None:
     if event.event_type == DEMO_EVENT_TYPE and event.source == DEMO_EVENT_SOURCE:
@@ -690,32 +727,51 @@ def _timeline_from_case_event(
             data_origin=origin,
         )
     if event.event_type == "ELIGIBILITY_EVALUATED":
+        decision = _bounded_event_value(
+            event.event_data,
+            "eligibility_decision",
+            _ELIGIBILITY_TIMELINE_VALUES,
+        )
+        reason = _bounded_event_reason(
+            event.event_data,
+            "eligibility_reason",
+        )
         return TimelineItem(
             stage="ELIGIBILITY",
             title="Recovery eligibility evaluated",
             status="complete",
             timestamp=event.created_at,
-            detail=payment_case.eligibility_reason_code,
+            detail=reason or "Historical eligibility detail unavailable",
             authority="DETERMINISTIC_PRECONDITIONS",
-            result=(
-                payment_case.eligibility_status.value
-                if payment_case.eligibility_status is not None
-                else None
-            ),
+            result=decision,
             data_origin=origin,
         )
     if event.event_type in {"FAILURE_DIAGNOSED", "FAILURE_REDIAGNOSED"}:
+        category = _bounded_event_value(
+            event.event_data,
+            "failure_category",
+            _FAILURE_CATEGORY_TIMELINE_VALUES,
+        )
+        disposition = _bounded_event_value(
+            event.event_data,
+            "recovery_disposition",
+            _RECOVERY_DISPOSITION_TIMELINE_VALUES,
+        )
+        reason = _bounded_event_reason(
+            event.event_data,
+            "diagnosis_reason",
+        )
+        detail = " / ".join(
+            value for value in (category, disposition) if value is not None
+        )
         return TimelineItem(
             stage="DIAGNOSED",
             title="Failure diagnosed",
             status="complete",
             timestamp=event.created_at,
-            detail=(
-                payment_case.failure_category.value
-                if payment_case.failure_category is not None
-                else payment_case.diagnosis_reason_code
-            ),
+            detail=detail or "Historical diagnosis detail unavailable",
             authority="DETERMINISTIC_DIAGNOSIS",
+            result=reason,
             data_origin=origin,
         )
     return None

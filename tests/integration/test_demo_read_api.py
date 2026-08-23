@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Callable, Generator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient, Response
@@ -13,7 +13,7 @@ from arc.config import Settings
 from arc.db.session import get_db_session
 from arc.demo import seed_demo_scenarios
 from arc.domain.enums import ProviderMode
-from arc.domain.models import PaymentCase
+from arc.domain.models import CaseEvent, PaymentCase
 from arc.outcomes import RecoveryOutcomeService
 from services.api.main import create_app
 from tests.outcome_support import (
@@ -22,7 +22,15 @@ from tests.outcome_support import (
     outcome_snapshot,
     prepare_waiting_recovery,
 )
-from tests.reconciliation_support import SessionFactory
+from tests.reconciliation_support import (
+    SessionFactory,
+    StubRazorpayClient,
+    assessor,
+    load_cases,
+    payment_snapshot,
+    processor,
+    store_event,
+)
 
 
 @pytest.fixture
@@ -62,6 +70,11 @@ def _demo_settings() -> Settings:
         demo_mode=True,
         _env_file=None,
     )
+
+
+def _assessment_clock(payment_case: PaymentCase) -> datetime:
+    assert payment_case.last_reconciled_at is not None
+    return payment_case.last_reconciled_at + timedelta(seconds=1)
 
 
 def _recover(
@@ -271,6 +284,185 @@ def test_timeline_is_chronological_and_labels_authority_and_synthetic_origin(
         "MODEL_OBSERVABILITY_ONLY"
     )
     _assert_sensitive_fields_absent(timeline)
+
+
+def test_timeline_preserves_old_eligibility_after_reassessment(
+    integration_session_factory: SessionFactory,
+    api_get: Callable[[str], Response],
+) -> None:
+    payment_id = "pay_timeline_historical_eligibility"
+    client = StubRazorpayClient()
+    client.payments[payment_id] = payment_snapshot(payment_id=payment_id)
+    failed_event_id = store_event(
+        integration_session_factory,
+        event_type="payment.failed",
+        payment_id=payment_id,
+    )
+    processor(integration_session_factory, client).process_webhook_event(
+        failed_event_id
+    )
+    payment_case = load_cases(integration_session_factory)[0]
+    assessor(
+        integration_session_factory,
+        clock=lambda: _assessment_clock(payment_case),
+    ).assess_case(payment_case.id)
+
+    client.payments[payment_id] = payment_snapshot(
+        payment_id=payment_id,
+        status="captured",
+    )
+    captured_event_id = store_event(
+        integration_session_factory,
+        event_type="payment.captured",
+        payment_id=payment_id,
+    )
+    processor(integration_session_factory, client).process_webhook_event(
+        captured_event_id
+    )
+    reassessed_case = load_cases(integration_session_factory)[0]
+    assessor(
+        integration_session_factory,
+        clock=lambda: _assessment_clock(reassessed_case),
+    ).assess_case(reassessed_case.id)
+
+    response = api_get(
+        f"/api/v1/cases/{payment_case.case_reference}/timeline"
+    )
+
+    assert response.status_code == 200
+    eligibility = [
+        item for item in response.json() if item["stage"] == "ELIGIBILITY"
+    ]
+    assert [(item["result"], item["detail"]) for item in eligibility] == [
+        ("ELIGIBLE", "PAYMENT_FAILURE_CONFIRMED"),
+        ("STOP", "STOP_ALREADY_RECOVERED"),
+    ]
+
+
+def test_timeline_preserves_old_diagnosis_after_rediagnosis(
+    integration_session_factory: SessionFactory,
+    api_get: Callable[[str], Response],
+) -> None:
+    payment_id = "pay_timeline_historical_diagnosis"
+    client = StubRazorpayClient()
+    client.payments[payment_id] = payment_snapshot(payment_id=payment_id)
+    first_event_id = store_event(
+        integration_session_factory,
+        event_type="payment.failed",
+        payment_id=payment_id,
+    )
+    processor(integration_session_factory, client).process_webhook_event(
+        first_event_id
+    )
+    payment_case = load_cases(integration_session_factory)[0]
+    assessor(
+        integration_session_factory,
+        clock=lambda: _assessment_clock(payment_case),
+    ).assess_case(payment_case.id)
+
+    client.payments[payment_id] = payment_snapshot(
+        payment_id=payment_id,
+        error_reason="bank_technical_error",
+        error_source="customer",
+    )
+    second_event_id = store_event(
+        integration_session_factory,
+        event_type="payment.failed",
+        payment_id=payment_id,
+    )
+    processor(integration_session_factory, client).process_webhook_event(
+        second_event_id
+    )
+    reconciled_again = load_cases(integration_session_factory)[0]
+    assessor(
+        integration_session_factory,
+        clock=lambda: _assessment_clock(reconciled_again),
+    ).assess_case(reconciled_again.id)
+
+    response = api_get(
+        f"/api/v1/cases/{payment_case.case_reference}/timeline"
+    )
+
+    assert response.status_code == 200
+    diagnoses = [
+        item for item in response.json() if item["stage"] == "DIAGNOSED"
+    ]
+    assert [(item["detail"], item["result"]) for item in diagnoses] == [
+        (
+            "CUSTOMER_AUTHENTICATION / CUSTOMER_ACTION_REQUIRED",
+            "STRUCTURED_REASON_INCORRECT_OTP",
+        ),
+        (
+            "BANK_OR_ISSUER / RETRY_LATER",
+            "STRUCTURED_REASON_BANK_TECHNICAL_ERROR",
+        ),
+    ]
+
+
+def test_timeline_never_returns_raw_or_unbounded_case_event_data(
+    integration_session_factory: SessionFactory,
+    api_get: Callable[[str], Response],
+) -> None:
+    with integration_session_factory() as session:
+        payment_case = PaymentCase(
+            case_reference="case_timeline_event_data_boundary",
+            merchant_id="merchant_timeline_boundary",
+        )
+        session.add(payment_case)
+        session.flush()
+        session.add_all(
+            [
+                CaseEvent(
+                    case_id=payment_case.id,
+                    event_type="ELIGIBILITY_EVALUATED",
+                    source="DETERMINISTIC_ASSESSMENT",
+                    event_data={
+                        "eligibility_decision": "ELIGIBLE",
+                        "eligibility_reason": "PAYMENT_FAILURE_CONFIRMED",
+                        "assessment_fingerprint": "private-fingerprint-marker",
+                        "external_status": "private-status-marker",
+                        "raw_event_data": "private-raw-marker",
+                    },
+                ),
+                CaseEvent(
+                    case_id=payment_case.id,
+                    event_type="FAILURE_DIAGNOSED",
+                    source="DETERMINISTIC_ASSESSMENT",
+                    event_data={
+                        "failure_category": "private-category-marker",
+                        "recovery_disposition": "private-disposition-marker",
+                        "diagnosis_reason": "private free-form reason marker",
+                        "evidence": {"private": "private-evidence-marker"},
+                    },
+                ),
+            ]
+        )
+        session.commit()
+
+    response = api_get(
+        "/api/v1/cases/case_timeline_event_data_boundary/timeline"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    diagnosis = next(item for item in payload if item["stage"] == "DIAGNOSED")
+    assert diagnosis["detail"] == "Historical diagnosis detail unavailable"
+    assert diagnosis["result"] is None
+    serialized = repr(payload).lower()
+    for forbidden in (
+        "assessment_fingerprint",
+        "external_status",
+        "raw_event_data",
+        "evidence",
+        "private-fingerprint-marker",
+        "private-status-marker",
+        "private-raw-marker",
+        "private-category-marker",
+        "private-disposition-marker",
+        "private free-form reason marker",
+        "private-evidence-marker",
+    ):
+        assert forbidden not in serialized
 
 
 def test_approval_queue_and_recovery_action_list_are_sanitized(
