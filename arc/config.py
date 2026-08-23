@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     razorpay_api_base_url: AnyHttpUrl = "https://api.razorpay.com"
     razorpay_webhook_secret: SecretStr | None = None
     razorpay_webhook_previous_secret: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-5.6-luna"
+    openai_api_base_url: AnyHttpUrl = "https://api.openai.com/v1"
     environment: str = "development"
     debug: bool = False
 

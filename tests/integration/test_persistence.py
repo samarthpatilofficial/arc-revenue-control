@@ -63,6 +63,7 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
         "payment_cases",
         "case_events",
         "merchant_policies",
+        "strategy_proposals",
     }
 
     assert expected_tables.issubset(database_inspector.get_table_names())
@@ -124,6 +125,48 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     }
     assert "ix_webhook_events_event_type" in webhook_indexes
     assert "ix_webhook_events_received_at" in webhook_indexes
+
+    strategy_columns = {
+        column["name"]: column
+        for column in database_inspector.get_columns("strategy_proposals")
+    }
+    assert strategy_columns["assessment_fingerprint"]["nullable"] is False
+    assert strategy_columns["strategy_input_fingerprint"]["nullable"] is False
+    assert strategy_columns["created_at"]["type"].timezone is True
+    assert strategy_columns["superseded_at"]["type"].timezone is True
+
+    strategy_checks = {
+        constraint["name"]
+        for constraint in database_inspector.get_check_constraints(
+            "strategy_proposals"
+        )
+    }
+    assert "ck_strategy_proposals_source" in strategy_checks
+    assert "ck_strategy_proposals_action" in strategy_checks
+    assert "ck_strategy_proposals_confidence_range" in strategy_checks
+    assert "ck_strategy_proposals_source_metadata" in strategy_checks
+
+    strategy_indexes = {
+        index["name"]: index
+        for index in database_inspector.get_indexes("strategy_proposals")
+    }
+    assert "ix_strategy_proposals_case_id_created_at" in strategy_indexes
+    assert strategy_indexes["uq_strategy_proposals_current_case"]["unique"]
+
+    strategy_uniques = {
+        constraint["name"]
+        for constraint in database_inspector.get_unique_constraints(
+            "strategy_proposals"
+        )
+    }
+    assert "uq_strategy_proposals_case_input_fingerprint" in strategy_uniques
+
+    strategy_foreign_keys = database_inspector.get_foreign_keys(
+        "strategy_proposals"
+    )
+    assert len(strategy_foreign_keys) == 1
+    assert strategy_foreign_keys[0]["referred_table"] == "payment_cases"
+    assert strategy_foreign_keys[0]["options"]["ondelete"] == "RESTRICT"
 
 
 def test_webhook_event_can_be_inserted(db_session: Session) -> None:

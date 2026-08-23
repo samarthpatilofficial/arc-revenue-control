@@ -1,6 +1,6 @@
 """Tests for typed application configuration."""
 
-from arc.config import get_settings
+from arc.config import Settings, get_settings
 
 
 def test_settings_load_from_environment(monkeypatch) -> None:
@@ -17,6 +17,8 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_test_config_only")
     monkeypatch.setenv("RAZORPAY_KEY_SECRET", "config_only_secret")
     monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", "test_webhook_secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "config_only_openai_secret")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv(
         "RAZORPAY_WEBHOOK_PREVIOUS_SECRET",
         "test_previous_webhook_secret",
@@ -33,6 +35,8 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert settings.razorpay_webhook_secret is not None
     assert settings.razorpay_key_id is not None
     assert settings.razorpay_key_secret is not None
+    assert settings.openai_api_key is not None
+    assert settings.openai_model == "gpt-5.6-luna"
     assert (
         settings.razorpay_webhook_secret.get_secret_value()
         == "test_webhook_secret"
@@ -42,5 +46,19 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert "test_previous_webhook_secret" not in repr(settings)
     assert "rzp_test_config_only" not in repr(settings)
     assert "config_only_secret" not in repr(settings)
+    assert "config_only_openai_secret" not in repr(settings)
 
     get_settings.cache_clear()
+
+
+def test_openai_key_is_optional_at_startup() -> None:
+    settings = Settings(
+        database_url=(
+            "postgresql+psycopg://arc:test_only@localhost:5432/arc_test"
+        ),
+        openai_api_key=None,
+        _env_file=None,
+    )
+
+    assert settings.openai_api_key is None
+    assert settings.openai_model == "gpt-5.6-luna"

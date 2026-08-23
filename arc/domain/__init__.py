@@ -5,7 +5,9 @@ from arc.domain.enums import (
     EligibilityDecision,
     EventProcessingStatus,
     FailureCategory,
+    RecoveryAction,
     RecoveryDisposition,
+    StrategySource,
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "EligibilityDecision",
     "EventProcessingStatus",
     "FailureCategory",
+    "RecoveryAction",
     "RecoveryDisposition",
+    "StrategySource",
 ]

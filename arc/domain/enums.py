@@ -69,3 +69,21 @@ class RecoveryDisposition(StrEnum):
     RECOVERY_STRATEGY_REQUIRED = "RECOVERY_STRATEGY_REQUIRED"
     MANUAL_REVIEW = "MANUAL_REVIEW"
     UNKNOWN = "UNKNOWN"
+
+
+class RecoveryAction(StrEnum):
+    """Bounded recovery proposals; these values never imply authorization."""
+
+    NO_ACTION = "NO_ACTION"
+    WAIT = "WAIT"
+    REQUEST_RETRY = "REQUEST_RETRY"
+    CREATE_RECOVERY_LINK = "CREATE_RECOVERY_LINK"
+    REQUEST_PAYMENT_METHOD_UPDATE = "REQUEST_PAYMENT_METHOD_UPDATE"
+    ESCALATE_TO_HUMAN = "ESCALATE_TO_HUMAN"
+
+
+class StrategySource(StrEnum):
+    """Controlled provenance for a persisted strategy proposal."""
+
+    RULE = "RULE"
+    AI = "AI"

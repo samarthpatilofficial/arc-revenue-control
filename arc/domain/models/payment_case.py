@@ -28,6 +28,7 @@ from arc.domain.enums import (
 
 if TYPE_CHECKING:
     from arc.domain.models.case_event import CaseEvent
+    from arc.domain.models.strategy_proposal import StrategyProposal
 
 case_state_type = SqlEnum(
     CaseState,
@@ -192,4 +193,8 @@ class PaymentCase(Base):
     case_events: Mapped[list["CaseEvent"]] = relationship(
         back_populates="case",
         order_by="CaseEvent.created_at",
+    )
+    strategy_proposals: Mapped[list["StrategyProposal"]] = relationship(
+        back_populates="case",
+        order_by="StrategyProposal.created_at",
     )

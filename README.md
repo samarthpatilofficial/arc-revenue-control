@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository currently contains ARC's Day 1 backend financial core: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, secure webhook ingress, an immutable external event ledger, authoritative read-only Razorpay reconciliation, a deterministic recovery preconditions gate, and deterministic failure diagnosis.
+This repository contains ARC's backend financial core plus its first Day 2 strategy slice: a FastAPI application, PostgreSQL persistence, secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, and bounded recovery-strategy proposals.
 
 ## Local setup
 
@@ -77,7 +77,17 @@ authoritative reconciliation -> precondition gate -> deterministic diagnosis
 
 A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so ARC does not compete with Razorpay retries; and a `halted` subscription is eligible for deterministic diagnosis because automatic retries are exhausted. Payment diagnosis uses structured Razorpay reason, source, and step fields in that precedence order, with bounded future-tolerant fallbacks.
 
-AI strategy, merchant authorization, recovery execution, Payment Links, human approval workflows, recovery-attempt changes, and revenue attribution are not implemented yet. The deterministic assessment projection does not choose or execute a customer recovery action.
+Eligible `DIAGNOSED` cases can now move through a bounded proposal stage:
+
+```text
+reconcile -> eligibility -> deterministic diagnosis -> bounded AI/rule proposal
+```
+
+AI proposals use the OpenAI Responses API with strict Structured Outputs and the fixed action vocabulary `NO_ACTION`, `WAIT`, `REQUEST_RETRY`, `CREATE_RECOVERY_LINK`, `REQUEST_PAYMENT_METHOD_UPDATE`, and `ESCALATE_TO_HUMAN`. Manual-review and merchant-fix dispositions bypass AI and produce deterministic rule proposals. Strategy generation sends no customer PII or external payment/subscription identifiers, and a post-inference database fence discards output if reconciled facts changed while the model was running.
+
+Set `OPENAI_API_KEY` privately only when AI strategy generation is needed; application startup and automated tests do not require a real key. `OPENAI_MODEL` defaults to `gpt-5.6-luna`.
+
+AI proposes only. Confidence is observability data, not authorization. Merchant policy authorization, recovery execution, Payment Links, customer communication, human approval UI, frontend, and revenue attribution are not implemented yet.
 
 Run the tests with:
 

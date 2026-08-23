@@ -36,6 +36,8 @@ jobs:
       RAZORPAY_KEY_ID: rzp_test_ci_only
       RAZORPAY_KEY_SECRET: ci_only_secret
       RAZORPAY_WEBHOOK_SECRET: ci_only_webhook_secret_for_tests
+      OPENAI_API_KEY: ci_only_fake_openai_key
+      OPENAI_MODEL: gpt-5.6-luna
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
