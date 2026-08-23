@@ -14,6 +14,7 @@ from arc.config import get_settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CORE_TABLES = (
+    "policy_decisions",
     "strategy_proposals",
     "case_events",
     "webhook_events",

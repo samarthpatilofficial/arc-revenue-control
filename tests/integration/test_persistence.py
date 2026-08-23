@@ -64,6 +64,7 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
         "case_events",
         "merchant_policies",
         "strategy_proposals",
+        "policy_decisions",
     }
 
     assert expected_tables.issubset(database_inspector.get_table_names())
@@ -105,6 +106,8 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     assert payment_case_columns["recovery_disposition"]["nullable"] is True
     assert payment_case_columns["diagnosed_at"]["type"].timezone is True
     assert payment_case_columns["assessment_fingerprint"]["nullable"] is True
+    assert payment_case_columns["contact_attempt_count"]["nullable"] is False
+    assert str(payment_case_columns["contact_attempt_count"]["default"]) == "0"
 
     payment_case_checks = {
         constraint["name"]
@@ -117,6 +120,10 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     assert "ck_payment_cases_recovery_disposition" in payment_case_checks
     assert (
         "ck_payment_cases_assessment_fingerprint_sha256_hex"
+        in payment_case_checks
+    )
+    assert (
+        "ck_payment_cases_contact_attempt_count_non_negative"
         in payment_case_checks
     )
 
@@ -167,6 +174,65 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     assert len(strategy_foreign_keys) == 1
     assert strategy_foreign_keys[0]["referred_table"] == "payment_cases"
     assert strategy_foreign_keys[0]["options"]["ondelete"] == "RESTRICT"
+
+    policy_decision_columns = {
+        column["name"]: column
+        for column in database_inspector.get_columns("policy_decisions")
+    }
+    assert policy_decision_columns["merchant_policy_id"]["nullable"] is True
+    assert policy_decision_columns["evaluated_at"]["type"].timezone is True
+    assert policy_decision_columns["superseded_at"]["type"].timezone is True
+
+    policy_decision_checks = {
+        constraint["name"]
+        for constraint in database_inspector.get_check_constraints(
+            "policy_decisions"
+        )
+    }
+    assert "ck_policy_decisions_result" in policy_decision_checks
+    assert (
+        "ck_policy_decisions_authorization_input_fingerprint_sha256_hex"
+        in policy_decision_checks
+    )
+    assert (
+        "ck_policy_decisions_observed_contact_attempt_count_non_negative"
+        in policy_decision_checks
+    )
+
+    policy_decision_indexes = {
+        index["name"]: index
+        for index in database_inspector.get_indexes("policy_decisions")
+    }
+    assert policy_decision_indexes["uq_policy_decisions_current_case"][
+        "unique"
+    ]
+
+    policy_decision_uniques = {
+        constraint["name"]
+        for constraint in database_inspector.get_unique_constraints(
+            "policy_decisions"
+        )
+    }
+    assert (
+        "uq_policy_decisions_case_authorization_input"
+        in policy_decision_uniques
+    )
+
+    policy_decision_foreign_keys = {
+        foreign_key["referred_table"]: foreign_key
+        for foreign_key in database_inspector.get_foreign_keys(
+            "policy_decisions"
+        )
+    }
+    assert set(policy_decision_foreign_keys) == {
+        "payment_cases",
+        "strategy_proposals",
+        "merchant_policies",
+    }
+    assert all(
+        foreign_key["options"]["ondelete"] == "RESTRICT"
+        for foreign_key in policy_decision_foreign_keys.values()
+    )
 
 
 def test_webhook_event_can_be_inserted(db_session: Session) -> None:
@@ -263,6 +329,17 @@ def test_negative_attempt_count_is_rejected(db_session: Session) -> None:
 
     db_session.rollback()
     assert db_session.scalar(select(func.count()).select_from(PaymentCase)) == 0
+
+
+def test_negative_contact_attempt_count_is_rejected(db_session: Session) -> None:
+    payment_case = _new_payment_case()
+    payment_case.contact_attempt_count = -1
+    db_session.add(payment_case)
+
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+    db_session.rollback()
 
 
 def test_negative_webhook_processing_attempt_count_is_rejected(

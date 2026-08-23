@@ -28,6 +28,7 @@ from arc.domain.enums import (
 
 if TYPE_CHECKING:
     from arc.domain.models.case_event import CaseEvent
+    from arc.domain.models.policy_decision import PolicyDecision
     from arc.domain.models.strategy_proposal import StrategyProposal
 
 case_state_type = SqlEnum(
@@ -84,6 +85,10 @@ class PaymentCase(Base):
             name="case_state",
         ),
         CheckConstraint("attempt_count >= 0", name="attempt_count_non_negative"),
+        CheckConstraint(
+            "contact_attempt_count >= 0",
+            name="contact_attempt_count_non_negative",
+        ),
         CheckConstraint(
             "amount IS NULL OR amount >= 0",
             name="amount_non_negative",
@@ -169,6 +174,12 @@ class PaymentCase(Base):
         default=0,
         server_default="0",
     )
+    contact_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -197,4 +208,8 @@ class PaymentCase(Base):
     strategy_proposals: Mapped[list["StrategyProposal"]] = relationship(
         back_populates="case",
         order_by="StrategyProposal.created_at",
+    )
+    policy_decisions: Mapped[list["PolicyDecision"]] = relationship(
+        back_populates="case",
+        order_by="PolicyDecision.evaluated_at",
     )

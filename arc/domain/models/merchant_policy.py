@@ -1,7 +1,7 @@
 """Merchant recovery-control configuration model."""
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -15,9 +15,12 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from arc.db.base import Base
+
+if TYPE_CHECKING:
+    from arc.domain.models.policy_decision import PolicyDecision
 
 
 class MerchantPolicy(Base):
@@ -104,4 +107,9 @@ class MerchantPolicy(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+    policy_decisions: Mapped[list["PolicyDecision"]] = relationship(
+        back_populates="merchant_policy",
+        order_by="PolicyDecision.evaluated_at",
     )

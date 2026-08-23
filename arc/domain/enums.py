@@ -87,3 +87,11 @@ class StrategySource(StrEnum):
 
     RULE = "RULE"
     AI = "AI"
+
+
+class PolicyDecisionResult(StrEnum):
+    """Deterministic authorization outcomes; none executes an action."""
+
+    AUTHORIZED = "AUTHORIZED"
+    REQUIRES_APPROVAL = "REQUIRES_APPROVAL"
+    BLOCKED = "BLOCKED"

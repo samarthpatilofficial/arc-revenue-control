@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository contains ARC's backend financial core plus its first Day 2 strategy slice: a FastAPI application, PostgreSQL persistence, secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, and bounded recovery-strategy proposals.
+This repository contains ARC's backend financial core and deterministic authorization path: a FastAPI application, PostgreSQL persistence, secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded recovery-strategy proposals, and merchant policy evaluation.
 
 ## Local setup
 
@@ -42,7 +42,7 @@ python -m alembic upgrade head
 python -m uvicorn services.api.main:app --reload
 ```
 
-The migration creates the core `webhook_events`, `payment_cases`, `case_events`, and `merchant_policies` tables.
+The migrations create the event/case ledger, merchant policies, bounded strategy proposals, and append-friendly policy decisions.
 
 The API is available at `http://localhost:8000`. Its liveness endpoint is:
 
@@ -80,14 +80,16 @@ A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so 
 Eligible `DIAGNOSED` cases can now move through a bounded proposal stage:
 
 ```text
-reconcile -> eligibility -> deterministic diagnosis -> bounded AI/rule proposal
+reconcile -> eligibility -> deterministic diagnosis -> bounded AI/rule proposal -> deterministic merchant policy
 ```
 
 AI proposals use the OpenAI Responses API with strict Structured Outputs and the fixed action vocabulary `NO_ACTION`, `WAIT`, `REQUEST_RETRY`, `CREATE_RECOVERY_LINK`, `REQUEST_PAYMENT_METHOD_UPDATE`, and `ESCALATE_TO_HUMAN`. Manual-review and merchant-fix dispositions bypass AI and produce deterministic rule proposals. Strategy generation sends no customer PII or external payment/subscription identifiers, and a post-inference database fence discards output if reconciled facts changed while the model was running.
 
 Set `OPENAI_API_KEY` privately only when AI strategy generation is needed; application startup and automated tests do not require a real key. `OPENAI_MODEL` defaults to `gpt-5.6-luna`.
 
-AI proposes only. Confidence is observability data, not authorization. Merchant policy authorization, recovery execution, Payment Links, customer communication, human approval UI, frontend, and revenue attribution are not implemented yet.
+Merchant authorization is deterministic. It validates the action allowlist, automated-attempt and customer-contact limits, recovery window, approval threshold, and a small typed stopping-rule schema. Missing or malformed policy fails closed for external recovery actions. Safe internal actions remain available, and high-value cases can require human approval. Model confidence is observability data and cannot bypass policy.
+
+**AI proposes. Policy authorizes.** Execution is still not implemented. `POLICY_VALIDATED` alone is not permission to execute; a future executor must load the current unsuperseded policy decision, and only `AUTHORIZED` is executable. `REQUIRES_APPROVAL` and `BLOCKED` remain non-executable. Payment Links, payment writes, customer communication, approval UI, frontend, outcome observation, and revenue attribution are not implemented yet.
 
 Run the tests with:
 
