@@ -74,6 +74,10 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     assert isinstance(webhook_columns["raw_payload"]["type"], JSONB)
     assert webhook_columns["received_at"]["type"].timezone is True
     assert webhook_columns["raw_body_sha256"]["nullable"] is True
+    assert webhook_columns["processing_started_at"]["type"].timezone is True
+    assert webhook_columns["processing_started_at"]["nullable"] is True
+    assert webhook_columns["processing_attempt_count"]["nullable"] is False
+    assert str(webhook_columns["processing_attempt_count"]["default"]) == "0"
 
     webhook_checks = {
         constraint["name"]
@@ -82,6 +86,10 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
         )
     }
     assert "ck_webhook_events_raw_body_sha256_hex" in webhook_checks
+    assert (
+        "ck_webhook_events_processing_attempt_count_non_negative"
+        in webhook_checks
+    )
 
     payment_case_columns = {
         column["name"]: column
@@ -191,6 +199,18 @@ def test_negative_attempt_count_is_rejected(db_session: Session) -> None:
 
     db_session.rollback()
     assert db_session.scalar(select(func.count()).select_from(PaymentCase)) == 0
+
+
+def test_negative_webhook_processing_attempt_count_is_rejected(
+    db_session: Session,
+) -> None:
+    result = _record_event(db_session)
+    result.event.processing_attempt_count = -1
+
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+    db_session.rollback()
 
 
 def test_case_event_requires_existing_case(db_session: Session) -> None:

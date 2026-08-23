@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -27,6 +27,12 @@ from arc.reconciliation.payment import reconcile_payment
 from arc.reconciliation.subscription import reconcile_subscription
 
 MAX_PROCESSING_ERROR_LENGTH = 256
+PROCESSING_LEASE_SECONDS = 120
+PROCESSING_LEASE = timedelta(seconds=PROCESSING_LEASE_SECONDS)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +55,7 @@ class _ClaimedEvent:
     payment_id: str | None
     subscription_id: str | None
     customer_id: str | None
+    processing_attempt_count: int
 
 
 class WebhookEventProcessor:
@@ -59,9 +66,11 @@ class WebhookEventProcessor:
         *,
         session_factory: Callable[[], Session],
         razorpay_client: RazorpayEntityReader,
+        clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self._session_factory = session_factory
         self._razorpay_client = razorpay_client
+        self._clock = clock
 
     def process_webhook_event(self, event_id: UUID) -> WebhookProcessingResult:
         """Process a stored event once without invoking any recovery action."""
@@ -74,17 +83,17 @@ class WebhookEventProcessor:
             snapshot = self._fetch_authoritative_entity(claim)
             return self._apply_reconciliation(claim, snapshot)
         except RazorpayClientError as error:
-            return self._mark_failed(claim.id, str(error))
+            return self._mark_failed(claim, str(error))
         except (CasePersistenceError, WebhookProcessingError) as error:
-            return self._mark_failed(claim.id, str(error))
+            return self._mark_failed(claim, str(error))
         except SQLAlchemyError:
             return self._mark_failed(
-                claim.id,
+                claim,
                 "ARC database reconciliation failed",
             )
         except Exception:
             return self._mark_failed(
-                claim.id,
+                claim,
                 "Webhook reconciliation failed safely",
             )
 
@@ -125,16 +134,26 @@ class WebhookEventProcessor:
                     idempotent=True,
                 )
 
+            claim_started_at = self._clock()
             if event.processing_status is EventProcessingStatus.PROCESSING:
-                return WebhookProcessingResult(
-                    event_id=event.id,
-                    processing_status=EventProcessingStatus.PROCESSING,
-                    case_id=None,
-                    reason_code="EVENT_ALREADY_PROCESSING",
-                    idempotent=True,
-                )
+                lease_started_at = event.processing_started_at
+                lease_cutoff = claim_started_at - PROCESSING_LEASE
+                if (
+                    lease_started_at is not None
+                    and lease_started_at.utcoffset() is not None
+                    and lease_started_at > lease_cutoff
+                ):
+                    return WebhookProcessingResult(
+                        event_id=event.id,
+                        processing_status=EventProcessingStatus.PROCESSING,
+                        case_id=None,
+                        reason_code="EVENT_ALREADY_PROCESSING",
+                        idempotent=True,
+                    )
 
             event.processing_status = EventProcessingStatus.PROCESSING
+            event.processing_started_at = claim_started_at
+            event.processing_attempt_count += 1
             event.processed_at = None
             event.processing_error = None
             claimed = _ClaimedEvent(
@@ -145,6 +164,7 @@ class WebhookEventProcessor:
                 payment_id=event.payment_id,
                 subscription_id=event.subscription_id,
                 customer_id=event.customer_id,
+                processing_attempt_count=event.processing_attempt_count,
             )
             session.commit()
             return claimed
@@ -187,6 +207,17 @@ class WebhookEventProcessor:
                     reason_code="EVENT_ALREADY_PROCESSED",
                     idempotent=True,
                 )
+            if (
+                event.processing_attempt_count
+                != claimed.processing_attempt_count
+            ):
+                return WebhookProcessingResult(
+                    event_id=event.id,
+                    processing_status=event.processing_status,
+                    case_id=None,
+                    reason_code="EVENT_PROCESSING_CLAIM_SUPERSEDED",
+                    idempotent=True,
+                )
             if event.processing_status is not EventProcessingStatus.PROCESSING:
                 raise WebhookProcessingError(
                     "Webhook event is not available for reconciliation"
@@ -202,7 +233,7 @@ class WebhookEventProcessor:
                 )
 
             event.processing_status = EventProcessingStatus.PROCESSED
-            event.processed_at = datetime.now(UTC)
+            event.processed_at = self._clock()
             event.processing_error = None
             session.commit()
             return WebhookProcessingResult(
@@ -214,14 +245,14 @@ class WebhookEventProcessor:
 
     def _mark_failed(
         self,
-        event_id: UUID,
+        claimed: _ClaimedEvent,
         safe_error: str,
     ) -> WebhookProcessingResult:
         bounded_error = safe_error[:MAX_PROCESSING_ERROR_LENGTH]
         with self._session_factory() as session:
             event = session.scalar(
                 select(WebhookEvent)
-                .where(WebhookEvent.id == event_id)
+                .where(WebhookEvent.id == claimed.id)
                 .with_for_update()
             )
             if event is None:
@@ -234,9 +265,20 @@ class WebhookEventProcessor:
                     reason_code="EVENT_ALREADY_PROCESSED",
                     idempotent=True,
                 )
+            if (
+                event.processing_attempt_count
+                != claimed.processing_attempt_count
+            ):
+                return WebhookProcessingResult(
+                    event_id=event.id,
+                    processing_status=event.processing_status,
+                    case_id=None,
+                    reason_code="EVENT_PROCESSING_CLAIM_SUPERSEDED",
+                    idempotent=True,
+                )
             event.processing_status = EventProcessingStatus.FAILED
             event.processing_error = bounded_error
-            event.processed_at = datetime.now(UTC)
+            event.processed_at = self._clock()
             session.commit()
             return WebhookProcessingResult(
                 event_id=event.id,

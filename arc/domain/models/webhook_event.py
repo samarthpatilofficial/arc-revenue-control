@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Enum as SqlEnum,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -58,6 +59,10 @@ class WebhookEvent(Base):
             "('RECEIVED', 'PROCESSING', 'PROCESSED', 'FAILED', 'UNSUPPORTED')",
             name="event_processing_status",
         ),
+        CheckConstraint(
+            "processing_attempt_count >= 0",
+            name="processing_attempt_count_non_negative",
+        ),
         Index("ix_webhook_events_event_type", "event_type"),
         Index("ix_webhook_events_received_at", "received_at"),
         Index("ix_webhook_events_payment_id", "payment_id"),
@@ -88,6 +93,15 @@ class WebhookEvent(Base):
         nullable=False,
         default=EventProcessingStatus.RECEIVED,
         server_default=EventProcessingStatus.RECEIVED.value,
+    )
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    processing_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     processing_error: Mapped[str | None] = mapped_column(Text)

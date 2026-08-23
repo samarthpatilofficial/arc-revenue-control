@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -108,6 +109,9 @@ def store_event(
     customer_id: str | None = "cust_webhook",
     account_id: str | None = "acc_test",
     processing_status: EventProcessingStatus = EventProcessingStatus.RECEIVED,
+    processing_started_at: datetime | None = None,
+    processing_attempt_count: int = 0,
+    processing_error: str | None = None,
 ) -> UUID:
     razorpay_event_id = event_id or f"evt_{uuid4().hex}"
     raw_payload: dict[str, Any] = {
@@ -129,6 +133,9 @@ def store_event(
             signature_verified=True,
             processing_status=processing_status,
         )
+        result.event.processing_started_at = processing_started_at
+        result.event.processing_attempt_count = processing_attempt_count
+        result.event.processing_error = processing_error
         session.commit()
         return result.event.id
 
@@ -136,10 +143,18 @@ def store_event(
 def processor(
     session_factory: SessionFactory,
     client: StubRazorpayClient,
+    *,
+    clock: Callable[[], datetime] | None = None,
 ) -> WebhookEventProcessor:
+    if clock is None:
+        return WebhookEventProcessor(
+            session_factory=session_factory,
+            razorpay_client=client,
+        )
     return WebhookEventProcessor(
         session_factory=session_factory,
         razorpay_client=client,
+        clock=clock,
     )
 
 
