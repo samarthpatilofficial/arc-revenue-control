@@ -1,0 +1,3 @@
+Alembic migration environment for the ARC PostgreSQL schema.
+
+Migration revisions are generated in the versions directory as domain models are introduced.
