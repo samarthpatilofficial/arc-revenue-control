@@ -64,6 +64,8 @@ class PaymentCase(Base):
     merchant_id: Mapped[str] = mapped_column(String(100), nullable=False)
     payment_id: Mapped[str | None] = mapped_column(String(100))
     subscription_id: Mapped[str | None] = mapped_column(String(100))
+    razorpay_payment_status: Mapped[str | None] = mapped_column(String(64))
+    razorpay_subscription_status: Mapped[str | None] = mapped_column(String(64))
     customer_id: Mapped[str | None] = mapped_column(String(100))
     amount: Mapped[int | None] = mapped_column(
         BigInteger,

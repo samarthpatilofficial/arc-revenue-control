@@ -83,7 +83,10 @@ def normalize_webhook_payload(payload: object) -> NormalizedWebhookEvent:
         event_type=event_type,
         account_id=_identifier(payload.get("account_id")),
         payment_id=_identifier(payment.get("id")),
-        subscription_id=_identifier(subscription.get("id")),
+        subscription_id=(
+            _identifier(subscription.get("id"))
+            or _identifier(payment.get("subscription_id"))
+        ),
         customer_id=customer_id,
         raw_payload=dict(payload),
     )

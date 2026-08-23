@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository currently contains the backend foundation for ARC: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, an immutable external event ledger, and automated tests for the core persistence schema.
+This repository currently contains ARC's Day 1 backend financial foundation: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, secure webhook ingress, an immutable external event ledger, and authoritative read-only Razorpay reconciliation.
 
 ## Local setup
 
@@ -52,7 +52,7 @@ GET /health
 
 ### Webhook development
 
-Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file, then send Razorpay events to:
+Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file. This signing secret is separate from `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, which authenticate authoritative Razorpay Test Mode entity reads. Then send Razorpay events to:
 
 ```text
 POST /webhooks/razorpay
@@ -60,7 +60,16 @@ POST /webhooks/razorpay
 
 ARC verifies `X-Razorpay-Signature` using HMAC-SHA256 over the exact raw request bytes before parsing JSON. `x-razorpay-event-id` is required and protected by database uniqueness. During secret rotation, `RAZORPAY_WEBHOOK_PREVIOUS_SECRET` can temporarily validate retries signed with the former secret.
 
-The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, and `subscription.halted`. Other correctly signed events are safely recorded as unsupported. This endpoint only authenticates, normalizes, and persists events; reconciliation and recovery processing are intentionally not implemented yet.
+The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, and `subscription.halted`. Other correctly signed events are safely recorded as unsupported. The HTTP endpoint only authenticates, normalizes, and persists events so ingress remains fast.
+
+ARC treats a webhook as a signal, not current financial truth. A separate application service reconciles supported stored events using only these read operations:
+
+```text
+GET /v1/payments/{payment_id}
+GET /v1/subscriptions/{subscription_id}
+```
+
+The fetched status is stored separately from ARC's guarded case lifecycle. A captured payment or active subscription can safely resolve an existing case without trusting webhook order. A `pending` subscription means Razorpay's platform retry remains active; `halted` means those retries are exhausted. This foundation records those facts but does not diagnose failures, run AI, propose or execute recovery actions, increment recovery attempts, or attribute revenue.
 
 Run the tests with:
 

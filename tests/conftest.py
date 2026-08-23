@@ -8,7 +8,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from arc.config import get_settings
 
@@ -92,3 +92,18 @@ def db_session(migrated_engine: Engine) -> Generator[Session, None, None]:
     with Session(migrated_engine, expire_on_commit=False) as session:
         yield session
         session.rollback()
+
+
+@pytest.fixture
+def integration_session_factory(
+    migrated_engine: Engine,
+    db_session: Session,
+) -> sessionmaker[Session]:
+    """Return a factory after the guarded test tables have been cleared."""
+
+    del db_session
+    return sessionmaker(
+        bind=migrated_engine,
+        class_=Session,
+        expire_on_commit=False,
+    )

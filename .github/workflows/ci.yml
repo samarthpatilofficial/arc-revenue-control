@@ -33,6 +33,8 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://arc_ci:arc_ci@localhost:5432/arc_ci_test
       ENVIRONMENT: test
       DEBUG: "false"
+      RAZORPAY_KEY_ID: rzp_test_ci_only
+      RAZORPAY_KEY_SECRET: ci_only_secret
       RAZORPAY_WEBHOOK_SECRET: ci_only_webhook_secret_for_tests
     steps:
       - name: Check out repository

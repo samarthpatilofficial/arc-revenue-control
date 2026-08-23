@@ -83,6 +83,13 @@ def test_migration_creates_expected_schema(migrated_engine: Engine) -> None:
     }
     assert "ck_webhook_events_raw_body_sha256_hex" in webhook_checks
 
+    payment_case_columns = {
+        column["name"]: column
+        for column in database_inspector.get_columns("payment_cases")
+    }
+    assert payment_case_columns["razorpay_payment_status"]["nullable"] is True
+    assert payment_case_columns["razorpay_subscription_status"]["nullable"] is True
+
     webhook_indexes = {
         index["name"] for index in database_inspector.get_indexes("webhook_events")
     }

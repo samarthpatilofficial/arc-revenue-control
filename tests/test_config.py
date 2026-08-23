@@ -14,6 +14,8 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     )
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("DEBUG", "true")
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_test_config_only")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "config_only_secret")
     monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", "test_webhook_secret")
     monkeypatch.setenv(
         "RAZORPAY_WEBHOOK_PREVIOUS_SECRET",
@@ -29,6 +31,8 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert settings.sqlalchemy_test_database_url is not None
     assert settings.sqlalchemy_test_database_url.endswith("/arc_test")
     assert settings.razorpay_webhook_secret is not None
+    assert settings.razorpay_key_id is not None
+    assert settings.razorpay_key_secret is not None
     assert (
         settings.razorpay_webhook_secret.get_secret_value()
         == "test_webhook_secret"
@@ -36,5 +40,7 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert settings.razorpay_webhook_previous_secret is not None
     assert "test_webhook_secret" not in repr(settings)
     assert "test_previous_webhook_secret" not in repr(settings)
+    assert "rzp_test_config_only" not in repr(settings)
+    assert "config_only_secret" not in repr(settings)
 
     get_settings.cache_clear()
