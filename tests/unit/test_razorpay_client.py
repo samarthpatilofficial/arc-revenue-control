@@ -195,7 +195,12 @@ def test_new_external_status_is_preserved_for_safe_future_handling() -> None:
     assert payment.status == "future_status"
 
 
-def test_missing_api_credentials_fail_only_when_client_is_constructed() -> None:
+def test_missing_api_credentials_fail_only_when_client_is_constructed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("RAZORPAY_KEY_ID", raising=False)
+    monkeypatch.delenv("RAZORPAY_KEY_SECRET", raising=False)
+
     settings = Settings(
         database_url="postgresql+psycopg://arc:test@localhost:5432/arc_test",
         _env_file=None,
