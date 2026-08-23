@@ -50,6 +50,35 @@ The API is available at `http://localhost:8000`. Its liveness endpoint is:
 GET /health
 ```
 
+### Read API
+
+The versioned operator API is read-only and exposes display-safe projections:
+
+```text
+GET /api/v1/dashboard/summary?provider_mode=TEST&currency=INR
+GET /api/v1/cases
+GET /api/v1/cases/{case_reference}
+GET /api/v1/cases/{case_reference}/timeline
+GET /api/v1/approvals
+GET /api/v1/recovery-actions
+```
+
+Responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw webhook/provider data; fingerprints and idempotency keys; credentials; and Payment Link URLs. Dashboard recovery metrics always require one provider mode and currency, and are calculated only from persisted outcome evidence. Configure explicit frontend origins with `CORS_ALLOWED_ORIGINS`, using JSON array syntax. The default is no cross-origin access, and wildcard origins are rejected.
+
+### Controlled demo scenarios
+
+Synthetic demo seeding is disabled by default. To create the three idempotent offline scenarios in the configured database, enable it only for the command process:
+
+```powershell
+$env:ARC_DEMO_MODE = "true"
+python -m scripts.seed_demo
+Remove-Item Env:ARC_DEMO_MODE
+```
+
+The seeder makes no Razorpay or OpenAI calls and creates no Payment Link. Each scenario is marked `SYNTHETIC_DEMO` through a bounded audit event. The existing evidence-backed Razorpay Test Mode recovery remains separately labelled `TEST_MODE`.
+
+**TEST MODE != LIVE MONEY. SYNTHETIC DEMO != PROVIDER EVIDENCE.** Synthetic cases do not increase evidence-backed recovered-revenue metrics.
+
 ### Webhook development
 
 Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file. This signing secret is separate from `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, which authenticate authoritative Razorpay Test Mode entity reads. Then send Razorpay events to:
