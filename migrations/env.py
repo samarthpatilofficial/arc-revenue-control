@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import arc.domain.models  # noqa: F401  # Register model metadata for Alembic.
 from arc.config import get_settings
 from arc.db.base import Base
 
@@ -13,8 +14,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = get_settings().sqlalchemy_database_url.replace("%", "%%")
-config.set_main_option("sqlalchemy.url", database_url)
+if not config.get_main_option("sqlalchemy.url"):
+    database_url = get_settings().sqlalchemy_database_url.replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
 

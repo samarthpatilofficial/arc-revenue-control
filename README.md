@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository currently contains the backend foundation for ARC: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migration tooling, and automated tests. Domain tables and schema revisions have not been added yet.
+This repository currently contains the backend foundation for ARC: a FastAPI application, typed environment configuration, PostgreSQL/SQLAlchemy infrastructure, Alembic migrations, an immutable external event ledger, and automated tests for the core persistence schema.
 
 ## Local setup
 
@@ -18,13 +18,14 @@ python -m pip install -e ".[dev]"
 
 ### Configure PostgreSQL
 
-For native PostgreSQL, create a local ARC development database and login role using your preferred PostgreSQL administration tool. Then set the private `.env` file to the matching connection URL:
+For native PostgreSQL, create a local ARC development database, a separate database whose name ends in `_test`, and a login role using your preferred PostgreSQL administration tool. Then set the private `.env` file to the matching connection URLs:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://<username>:<password>@localhost:5432/<database>
+TEST_DATABASE_URL=postgresql+psycopg://<username>:<password>@localhost:5432/<database>_test
 ```
 
-Never commit `.env`. The repository tracks only `.env.example` with non-secret placeholder values.
+The test database name must end in `_test`; destructive test setup refuses any other target. Never commit `.env`. The repository tracks only `.env.example` with non-secret placeholder values.
 
 If Docker is available, its PostgreSQL service can be used instead:
 
@@ -41,7 +42,7 @@ python -m alembic upgrade head
 python -m uvicorn services.api.main:app --reload
 ```
 
-There are intentionally no schema revision files yet. The Alembic command verifies connectivity now and will apply revisions once domain models are introduced.
+The migration creates the core `webhook_events`, `payment_cases`, `case_events`, and `merchant_policies` tables.
 
 The API is available at `http://localhost:8000`. Its liveness endpoint is:
 

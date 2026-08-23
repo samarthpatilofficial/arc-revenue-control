@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     """Typed runtime settings for the ARC backend."""
 
     database_url: PostgresDsn
+    test_database_url: PostgresDsn | None = None
     environment: str = "development"
     debug: bool = False
 
@@ -25,6 +26,14 @@ class Settings(BaseSettings):
         """Return the validated database URL in SQLAlchemy's string form."""
 
         return str(self.database_url)
+
+    @property
+    def sqlalchemy_test_database_url(self) -> str | None:
+        """Return the optional test database URL in SQLAlchemy's string form."""
+
+        if self.test_database_url is None:
+            return None
+        return str(self.test_database_url)
 
 
 @lru_cache

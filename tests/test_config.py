@@ -8,6 +8,10 @@ def test_settings_load_from_environment(monkeypatch) -> None:
         "DATABASE_URL",
         "postgresql+psycopg://arc:test_only@localhost:5432/arc_test",
     )
+    monkeypatch.setenv(
+        "TEST_DATABASE_URL",
+        "postgresql+psycopg://arc:test_only@localhost:5432/arc_test",
+    )
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("DEBUG", "true")
     get_settings.cache_clear()
@@ -17,5 +21,7 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert settings.environment == "test"
     assert settings.debug is True
     assert settings.sqlalchemy_database_url.startswith("postgresql+psycopg://")
+    assert settings.sqlalchemy_test_database_url is not None
+    assert settings.sqlalchemy_test_database_url.endswith("/arc_test")
 
     get_settings.cache_clear()
