@@ -7,7 +7,7 @@ This runbook prepares the persisted, read-only ARC demonstration on Windows. The
 In Windows PowerShell:
 
 ```powershell
-Set-Location "D:\GitHub Projects\arc-revenue-control"
+Set-Location "<path-to>\arc-revenue-control"
 .\.venv\Scripts\Activate.ps1
 ```
 
@@ -71,7 +71,7 @@ CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
 Open a second PowerShell terminal:
 
 ```powershell
-Set-Location "D:\GitHub Projects\arc-revenue-control\frontend"
+Set-Location "<path-to>\arc-revenue-control\frontend"
 npm run dev
 ```
 
@@ -92,7 +92,7 @@ Establish the payment-recovery problem, evidence-scoped metrics, and the control
 Open **Recovery verified** from **Demo recovery stories**. Show:
 
 - the original failure and diagnosis;
-- bounded AI proposal;
+- bounded recovery strategy;
 - deterministic policy authorization;
 - governed execution;
 - Razorpay Test Mode provider evidence;

@@ -1,60 +1,280 @@
 # ARC — Autonomous Revenue Control
 
-This repository contains ARC's backend financial core, governed recovery loop, and read-only operator console: secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded strategy proposals, merchant policy authorization, crash-safe Payment Link execution, authoritative outcome observation, and strict recovered-revenue attribution.
+**Policy-Governed AI Revenue Recovery for Razorpay Merchants**
 
-## Local setup
+Built for **Razorpay AI Buildathon — Track 03: AI Revenue Recovery**
 
-Requirements: Python 3.12+ and access to PostgreSQL. A native PostgreSQL installation is fully supported; Docker Compose is an optional alternative.
+ARC is an event-driven control plane that detects revenue at risk, reconciles current payment truth, proposes a bounded recovery strategy, enforces merchant policy, executes only authorized actions, and attributes revenue only after authoritative provider evidence confirms recovery.
 
-### Install the application
+> **AI proposes. Policy authorizes. The executor acts.**\
+> **Provider evidence proves recovery.**
 
-```powershell
-Copy-Item .env.example .env
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+
+![ARC revenue control overview](docs/assets/arc-overview.png)
+
+## The problem
+
+A failed payment is not automatically recoverable revenue. It may already have succeeded, a platform retry may still be active, or intervention may be unsafe.
+
+A naive recovery agent can create serious failure modes:
+
+- acting on stale webhook state;
+- retrying money already captured;
+- contacting customers too often;
+- bypassing merchant policy;
+- taking high-value financial actions without human approval;
+- claiming recovery before money was captured;
+- double-counting repeated provider events.
+
+ARC is designed around those risks. It treats revenue recovery as a control problem: establish what is true, decide what is appropriate, enforce authority, then prove the outcome.
+
+## What ARC does
+
+ARC closes one auditable recovery loop:
+
+| Stage | Owner | Responsibility |
+| --- | --- | --- |
+| **Detect** | Deterministic | Verify and durably record accepted payment events. |
+| **Reconcile** | Deterministic | Fetch authoritative provider state and prevent stale regression. |
+| **Diagnose** | Deterministic | Classify bounded failure evidence and recovery eligibility. |
+| **Decide** | AI or rule | Propose one action from a fixed recovery vocabulary. |
+| **Authorize** | Deterministic policy / human | Enforce allowlists, limits, thresholds, approval, and stopping rules. |
+| **Execute** | Governed executor | Perform only the exact authorized internal or provider action. |
+| **Observe** | Deterministic | Validate authoritative Payment Link and captured-payment evidence. |
+| **Measure** | Deterministic | Attribute revenue once and keep Test and Live metrics separate. |
+
+**Authority boundary:** AI owns bounded strategy proposal. Deterministic systems own financial truth, eligibility, policy authorization, execution validation, outcome validation, and attribution. A human retains authority over policy-scoped high-value actions.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    RP[Razorpay Test Mode] --> WG[Webhook Gateway]
+    WG --> EL[Immutable Event Ledger]
+    EL --> AR[Authoritative Reconciliation]
+    AR --> FD[Eligibility + Failure Diagnosis]
+    FD --> AI[AI Strategy Engine]
+    AI --> PG[Deterministic Policy Gate]
+    PG -->|Authorized| EX[Governed Executor]
+    PG -->|Approval required| HA[Human Approval]
+    HA -->|Approved after revalidation| EX
+    EX --> PL[Razorpay Standard Payment Link]
+    PL --> OO[Authoritative Outcome Observer]
+    OO --> AA[Recovery Attribution + Audit]
 ```
 
-### Configure PostgreSQL
+ARC is a modular monolith backed by PostgreSQL. The database is the concurrency and audit authority; no Redis, Celery, Kafka, or unrestricted model tool execution is involved. See [Technical Architecture](docs/ARCHITECTURE.md) for the deeper trust boundaries, state model, and data flow.
 
-For native PostgreSQL, create a local ARC development database, a separate database whose name ends in `_test`, and a login role using your preferred PostgreSQL administration tool. Then set the private `.env` file to the matching connection URLs:
+## Working proof
+
+### Provider-backed Test Mode proof
+
+**₹10.00 — provider-verified Test Mode recovery**
+
+**Razorpay Test Mode — not live money.**
+
+The persisted demonstration evidence confirms that:
+
+- one governed Standard Payment Link was created in Razorpay Test Mode;
+- the link was successfully paid in Test Mode;
+- ARC fetched authoritative provider state;
+- the paid amount matched the expected amount;
+- captured-payment evidence was validated;
+- exactly one recovery attribution was created;
+- the case reached `RECOVERED`;
+- outcome observation created no new Payment Link.
+
+![Provider-verified Test Mode recovery case](docs/assets/arc-recovery-case.png)
+
+Creating a Payment Link is not recovery. ARC increments recovered-revenue metrics only after authoritative Payment Link identity, stable reference, amount, currency, paid amount, and captured-payment evidence all match the governed action and case.
+
+### Demonstrated safety scenarios
+
+| Scenario | Origin | What it demonstrates |
+| --- | --- | --- |
+| Provider-verified recovery | `TEST_MODE` | Closed-loop recovery and evidence-backed attribution. |
+| High-value approval | `SYNTHETIC_DEMO` | AI cannot bypass deterministic policy or human authority. |
+| Already captured | `SYNTHETIC_DEMO` | Authoritative truth prevents unnecessary recovery. |
+| Hard stop | `SYNTHETIC_DEMO` | Stopping rules terminate unsafe or exhausted automation. |
+
+The three synthetic scenarios deterministically exercise safety branches without pretending to perform external financial actions or increasing evidence-backed recovery metrics.
+
+## Where AI is used — and where it is not
+
+ARC sends the strategy engine bounded, PII-minimized case context and requires strict Structured Outputs. The model may propose exactly one action from this vocabulary:
+
+- `NO_ACTION`
+- `WAIT`
+- `REQUEST_RETRY`
+- `CREATE_RECOVERY_LINK`
+- `REQUEST_PAYMENT_METHOD_UPDATE`
+- `ESCALATE_TO_HUMAN`
+
+The proposal is persisted and then fenced against current database state. If reconciled facts changed while the model was running, the stale result is discarded.
+
+AI does **not**:
+
+- decide current financial truth;
+- bypass merchant policy;
+- authorize high-value recovery;
+- call Razorpay directly;
+- determine whether revenue was recovered;
+- increment recovered-revenue metrics.
+
+**AI proposes. Policy authorizes.**
+
+![High-value policy approval case](docs/assets/arc-high-value-approval.png)
+
+## Safety and failure model
+
+Key safeguards include:
+
+- webhook HMAC verification over exact raw bytes;
+- database-backed webhook and action idempotency;
+- authoritative provider reads before financial decisions;
+- terminal-state non-regression and stale-state fencing;
+- deterministic merchant policy, attempt/contact limits, and stopping rules;
+- human approval at configured thresholds;
+- crash-safe processing and execution leases;
+- lookup-before-create after uncertain provider writes;
+- exact-once attempt and contact counters;
+- Payment Link identity, amount, currency, and captured-payment validation;
+- provider-payment uniqueness and duplicate-attribution protection;
+- explicit `TEST` / `LIVE` metric separation;
+- PII-minimized strategy, action, outcome, and attribution projections.
+
+![ARC decision trace](docs/assets/arc-decision-trace.png)
+
+## What broke — and how it was fixed
+
+These are verified defects encountered during the build, not hypothetical production stories.
+
+### Webhook processing crash safety
+
+**Problem:** an event committed as `PROCESSING` could remain stuck after a worker crash.\
+**Failure mode:** the durable event existed, but normal processing could not reclaim it.\
+**Fix:** a 120-second database processing lease, transactional stale reclaim, and incremented attempt metadata.
+
+### CI environment isolation
+
+**Problem:** a credential-absence unit test behaved differently because CI intentionally supplied fake Razorpay credentials.\
+**Failure mode:** disabling dotenv did not remove process environment variables.\
+**Fix:** the test explicitly removes both Razorpay variables with pytest `monkeypatch` before constructing settings.
+
+### Provider rate limiting during execution smoke
+
+**Problem:** an authoritative Razorpay lookup was rate-limited before Payment Link creation.\
+**Failure mode:** execution could not safely assume whether provider state was available.\
+**Fix:** ARC failed safely, then retried after cooldown with the same stable action and reference; exactly one Payment Link was created.
+
+### Historical decision trace fidelity
+
+**Problem:** old eligibility and diagnosis timeline entries were rendered from the mutable current case projection.\
+**Failure mode:** reassessment could make historical entries appear to say something they did not say at the time.\
+**Fix:** the timeline now renders only bounded values persisted with each historical `CaseEvent`.
+
+## Run the demo
+
+### Requirements
+
+- Python 3.12+
+- PostgreSQL
+- Node.js 22+
+
+```powershell
+git clone https://github.com/samarthpatilofficial/arc-revenue-control.git
+Set-Location .\arc-revenue-control
+
+Copy-Item .env.example .env
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+
+python -m alembic upgrade head
+python -m scripts.demo_preflight
+python -m uvicorn services.api.main:app --reload
+```
+
+In a second terminal:
+
+```powershell
+Set-Location .\frontend
+npm ci
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+Open `http://localhost:5173`. The operator console is read-only. For the exact PostgreSQL preparation, optional deterministic scenario seeding, and five-minute PowerShell walkthrough, use the [ARC Demo Runbook](docs/DEMO_RUNBOOK.md).
+
+The repository contains no database snapshot or provider credentials. On a fresh database, preflight correctly remains `NOT READY` until the required persisted Test Mode evidence and controlled scenarios exist; it never substitutes fabricated proof.
+
+## Final Buildathon validation
+
+Validation recorded for the accepted Task 12 revision:
+
+| Gate | Result |
+| --- | --- |
+| Backend test suite | 367 passed |
+| Frontend test suite | 13 passed |
+| Frontend lint | Passed |
+| Frontend production build | Passed |
+| Deterministic demo preflight | `DEMO STATUS: READY` |
+| GitHub Actions | Green after user verification |
+
+No dynamic coverage percentage is claimed.
+
+## Technology stack
+
+| Area | Technology |
+| --- | --- |
+| Backend | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2, PostgreSQL, Alembic, httpx |
+| AI | OpenAI Responses API, strict Structured Outputs |
+| Frontend | React, TypeScript, Vite, React Router, Lucide, plain CSS token system |
+| Quality | pytest, Vitest, ESLint, GitHub Actions |
+
+## Repository map
+
+```text
+arc/                    Core modular-monolith domain and application services
+  reconciliation/      Authoritative provider truth and guarded state transitions
+  diagnosis/           Deterministic failure classification
+  intelligence/        Bounded AI context, schema, prompt, and strategy service
+  policy/               Deterministic authorization and stopping rules
+  approval/             Policy-scoped human approval records and revalidation
+  execution/            Governed, idempotent recovery execution
+  outcomes/             Authoritative observation and strict attribution
+  read_models/          Display-safe operator projections
+  demo/                 Controlled seeding and read-only semantic preflight
+services/api/           FastAPI entry point, webhook ingress, and read API
+frontend/               Read-only React operator console
+migrations/             Alembic schema history
+tests/                  Unit, integration, and external-contract tests
+docs/                   Product, architecture, and demo guidance
+```
+
+## Local development details
+
+### PostgreSQL configuration
+
+Native PostgreSQL and the optional Compose service are both supported. Create separate development and test databases, then configure the private `.env`:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://<username>:<password>@localhost:5432/<database>
 TEST_DATABASE_URL=postgresql+psycopg://<username>:<password>@localhost:5432/<database>_test
 ```
 
-The test database name must end in `_test`; destructive test setup refuses any other target. Never commit `.env`. The repository tracks only `.env.example` with non-secret placeholder values.
-
-If Docker is available, its PostgreSQL service can be used instead:
-
-```powershell
-docker compose up -d postgres
-```
-
-The `POSTGRES_*` values and `DATABASE_URL` in `.env` must describe the same database when using Compose.
-
-### Run the foundation
-
-```powershell
-python -m alembic upgrade head
-python -m uvicorn services.api.main:app --reload
-```
-
-The migrations create the event/case ledger, merchant policies, bounded strategy and policy records, governed recovery actions, outcome observations, and recovery attributions.
-
-The API is available at `http://localhost:8000`. Its liveness endpoint is:
-
-```text
-GET /health
-```
+The test database name must end in `_test`; destructive test setup refuses any other target. Never commit `.env`. If Docker is available, PostgreSQL can instead be started with `docker compose up -d postgres`.
 
 ### Read API
 
-The versioned operator API is read-only and exposes display-safe projections:
-
 ```text
+GET /health
 GET /api/v1/dashboard/summary?provider_mode=TEST&currency=INR
 GET /api/v1/cases
 GET /api/v1/cases/{case_reference}
@@ -63,37 +283,19 @@ GET /api/v1/approvals
 GET /api/v1/recovery-actions
 ```
 
-Responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw webhook/provider data; fingerprints and idempotency keys; credentials; and Payment Link URLs. Dashboard recovery metrics always require one provider mode and currency, and are calculated only from persisted outcome evidence. Configure explicit frontend origins with `CORS_ALLOWED_ORIGINS`, using JSON array syntax. The default is no cross-origin access, and wildcard origins are rejected.
+Read responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw provider/webhook data; credentials; fingerprints; idempotency keys; and Payment Link URLs. CORS is deny-by-default and must be configured with explicit origins.
 
-### Frontend operator console
+### Webhook and governed recovery development
 
-The React/Vite console is a read-only interface over the versioned API. Start the backend at `http://localhost:8000`, then open a second terminal:
+`POST /webhooks/razorpay` verifies `X-Razorpay-Signature` over the exact raw request body and requires `x-razorpay-event-id`, protected by database uniqueness. Valid unknown event types are retained without unsafe processing.
 
-```powershell
-cd frontend
-npm install
-Copy-Item .env.example .env.local
-npm run dev
-```
+Supported webhook families cover payment failure/capture, subscription pending/halted, and Payment Link outcome signals. Webhooks are triggers rather than financial truth: supported entities are reconciled with authoritative Razorpay reads before decisions or attribution.
 
-The console is available at `http://localhost:5173`. `VITE_ARC_API_BASE_URL` controls its backend origin and defaults to `http://localhost:8000`; only public browser configuration belongs in `VITE_*` variables. In the backend's private root `.env`, allow the development origin explicitly:
-
-```dotenv
-CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
-```
-
-Create a production bundle with:
-
-```powershell
-cd frontend
-npm run build
-```
-
-The console distinguishes evidence-backed `TEST_MODE`, controlled `SYNTHETIC_DEMO`, and supported-but-not-implied `LIVE_MODE` data. It does not call Razorpay or OpenAI directly and provides no financial mutation controls.
+Private Razorpay and OpenAI credentials are optional for tests and local read-only demonstration. They belong only in `.env`; `.env.example` contains non-secret placeholders.
 
 ### Controlled demo scenarios
 
-Synthetic demo seeding is disabled by default. To create the three idempotent offline scenarios in the configured database, enable it only for the command process:
+Synthetic seeding is disabled by default and creates only three reserved, idempotent offline scenarios:
 
 ```powershell
 $env:ARC_DEMO_MODE = "true"
@@ -101,65 +303,37 @@ python -m scripts.seed_demo
 Remove-Item Env:ARC_DEMO_MODE
 ```
 
-The seeder makes no Razorpay or OpenAI calls and creates no Payment Link. Each scenario is marked `SYNTHETIC_DEMO` through a bounded audit event. The existing evidence-backed Razorpay Test Mode recovery remains separately labelled `TEST_MODE`.
+The seeder makes no Razorpay/OpenAI calls and creates no Payment Link. `SYNTHETIC_DEMO` cases never increase evidence-backed recovered-revenue metrics.
 
-**TEST MODE != LIVE MONEY. SYNTHETIC DEMO != PROVIDER EVIDENCE.** Synthetic cases do not increase evidence-backed recovered-revenue metrics.
-
-For deterministic preflight, startup, and the recommended five-minute operator click path, use the [ARC Demo Runbook](docs/DEMO_RUNBOOK.md).
-
-### Webhook development
-
-Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file. This signing secret is separate from `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, which authenticate authoritative Razorpay Test Mode entity reads. Then send Razorpay events to:
-
-```text
-POST /webhooks/razorpay
-```
-
-ARC verifies `X-Razorpay-Signature` using HMAC-SHA256 over the exact raw request bytes before parsing JSON. `x-razorpay-event-id` is required and protected by database uniqueness. During secret rotation, `RAZORPAY_WEBHOOK_PREVIOUS_SECRET` can temporarily validate retries signed with the former secret.
-
-The currently recognized event types are `payment.failed`, `payment.captured`, `subscription.pending`, `subscription.halted`, `payment_link.paid`, `payment_link.cancelled`, `payment_link.expired`, and `payment_link.partially_paid`. Other correctly signed events are safely recorded as unsupported. The HTTP endpoint only authenticates, normalizes, and persists events so ingress remains fast.
-
-ARC treats a webhook as a signal, not current financial truth. A separate application service reconciles supported stored events using only these read operations:
-
-```text
-GET /v1/payments/{payment_id}
-GET /v1/subscriptions/{subscription_id}
-```
-
-The fetched status is stored separately from ARC's guarded case lifecycle. A captured payment or active subscription can safely resolve an existing case without trusting webhook order. After reconciliation, ARC's assessment service applies this bounded sequence:
-
-```text
-authoritative reconciliation -> precondition gate -> deterministic diagnosis
-```
-
-A captured payment produces `STOP`; a `pending` subscription produces `WAIT` so ARC does not compete with Razorpay retries; and a `halted` subscription is eligible for deterministic diagnosis because automatic retries are exhausted. Payment diagnosis uses structured Razorpay reason, source, and step fields in that precedence order, with bounded future-tolerant fallbacks.
-
-Eligible `DIAGNOSED` cases can now move through the governed recovery loop:
-
-```text
-detect -> reconcile -> diagnose -> decide -> authorize -> execute -> observe -> measure
-```
-
-AI proposals use the OpenAI Responses API with strict Structured Outputs and the fixed action vocabulary `NO_ACTION`, `WAIT`, `REQUEST_RETRY`, `CREATE_RECOVERY_LINK`, `REQUEST_PAYMENT_METHOD_UPDATE`, and `ESCALATE_TO_HUMAN`. Manual-review and merchant-fix dispositions bypass AI and produce deterministic rule proposals. Strategy generation sends no customer PII or external payment/subscription identifiers, and a post-inference database fence discards output if reconciled facts changed while the model was running.
-
-Set `OPENAI_API_KEY` privately only when AI strategy generation is needed; application startup and automated tests do not require a real key. `OPENAI_MODEL` defaults to `gpt-5.6-luna`.
-
-Merchant authorization is deterministic. It validates the action allowlist, automated-attempt and customer-contact limits, recovery window, approval threshold, and a small typed stopping-rule schema. Missing or malformed policy fails closed for external recovery actions. Safe internal actions remain available, and high-value cases can require human approval. Model confidence is observability data and cannot bypass policy.
-
-**AI proposes. Policy authorizes. Human approval clears only the exact approval-required decision. The executor performs only that governed action.** `POLICY_VALIDATED` alone is not permission to execute: the executor rechecks current assessment, diagnosis, strategy, policy, counters, recovery window, and any exact approved record immediately before claiming work.
-
-Standard Razorpay Payment Link creation is ARC's first real external recovery side effect. `CREATE_RECOVERY_LINK` uses a stable `arc_<action-uuid>` reference, disables partial payments, reminders, SMS, and email, sends no customer PII, and recovers uncertain create outcomes through lookup-before-create. A PostgreSQL action ledger provides one row per policy decision, execution leases, exact-once counters, sanitized provider projections, and post-request compensation when financial truth changes during creation. `WAIT`, `NO_ACTION`, and `ESCALATE_TO_HUMAN` are bounded internal actions. `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` fail safely as not implemented because ARC has no valid Razorpay retry or customer-delivery executor for them.
-
-Creating a Payment Link is not recovered revenue. A Payment Link webhook is only a trigger: ARC matches it to an existing governed action and then performs an authoritative `GET /v1/payment_links/{id}`. Revenue is attributed only when the link id, stable reference, amount, paid amount, currency, and exactly one captured payment all match the original action and case. Partial, ambiguous, conflicting, or unknown evidence is escalated for review. Evidence fingerprints, action uniqueness, and provider-payment uniqueness prevent duplicate events or repeated polls from double-counting revenue.
-
-Every attribution is explicitly tagged `TEST` or `LIVE` from private credential metadata; metrics require an explicit provider-mode and currency scope, so test-mode revenue is never silently aggregated with live merchant revenue. No customer object, Payment Link URL, raw provider response, or credential is copied into outcome or attribution storage.
-
-There is no approval-write UI, automatic polling scheduler, or production operator identity system yet. ARC does not capture or refund payments, send customer communications, support partial-payment attribution, or infer recovery attribution from generic `payment.captured` events.
-
-Run the tests with:
+### Quality commands
 
 ```powershell
 python -m pytest
+python -m compileall arc services scripts
+python -m pip check
+
+Set-Location .\frontend
+npm run lint
+npm test -- --run
+npm run build
 ```
 
-If using Compose, stop its database with `docker compose down`. Add `--volumes` only when you intentionally want to remove local PostgreSQL data.
+## Current scope and limitations
+
+- The provider-backed proof is Razorpay Test Mode, not live merchant money.
+- The operator console is read-only and has no approval or execution mutation controls.
+- There is no production operator identity, authentication, or authorization system.
+- There is no automatic polling scheduler.
+- `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` have no external executor.
+- Partial-payment attribution is not supported.
+- ARC does not capture or refund payments.
+- ARC sends no customer communications.
+
+## Razorpay AI Buildathon
+
+**Track:** 03 — AI Revenue Recovery\
+**Project:** ARC — Autonomous Revenue Control
+
+**Core thesis:** AI can help choose a recovery strategy, but financial authority and recovered revenue must remain evidence-governed.
+
+Built for Razorpay AI Buildathon. ARC does not claim Razorpay endorsement or official integration status.
