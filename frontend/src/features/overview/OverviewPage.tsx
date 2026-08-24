@@ -23,6 +23,8 @@ import { getCases, getDashboardSummary } from "../../lib/api";
 import { formatMoney, formatPercent } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
 import type { CaseListItem, DashboardSummary } from "../../types/api";
+import { DemoStories } from "./DemoStories";
+import { detectDemoStories } from "./storyDetection";
 
 interface OverviewData {
   summary: DashboardSummary;
@@ -82,13 +84,8 @@ export function OverviewPage() {
 
   const summary = resource.data?.summary;
   const cases = resource.data?.cases ?? [];
-  const recoveredProof = cases.find(
-    (item) =>
-      item.data_origin === "TEST_MODE" &&
-      item.current_state === "RECOVERED" &&
-      item.recovered_amount_minor !== null &&
-      item.recovered_amount_minor > 0,
-  );
+  const stories = detectDemoStories(cases);
+  const recoveredProof = stories.find((story) => story.key === "realRecovery")?.caseItem ?? null;
 
   return (
     <>
@@ -141,50 +138,75 @@ export function OverviewPage() {
         </div>
       )}
 
-      <div className={`overview-layout ${!resource.loading && !recoveredProof ? "control-loop-only" : ""}`}>
-        <SectionCard
-          title="Recovery control loop"
-          subtitle="Financial truth and authority remain deterministic around one bounded AI stage."
-        >
-          <div className="control-loop" aria-label="ARC recovery control loop">
-            {controlSteps.map(({ label, note, icon: Icon, className }) => (
-              <div className={`control-step ${className ?? ""}`} key={label}>
-                <span className="control-step-icon">
-                  <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <strong>{label}</strong>
-                <small>{note}</small>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
+      <div className="overview-proof-section">
         {resource.loading ? (
-          <div className="skeleton" style={{ minHeight: 195 }} />
+          <div className="skeleton" style={{ minHeight: 164 }} />
         ) : recoveredProof ? (
           <Link
             className="proof-card"
             to={`/cases/${encodeURIComponent(recoveredProof.case_reference)}`}
           >
-            <div className="proof-eyebrow">
-              <CheckCircle2 size={15} aria-hidden="true" /> Recovery verified
+            <div className="proof-content">
+              <div className="proof-eyebrow">
+                <CheckCircle2 size={15} aria-hidden="true" /> Recovery verified
+              </div>
+              <div className="proof-label">Recovered Revenue</div>
+              <div className="proof-amount">
+                {formatMoney(
+                  recoveredProof.recovered_amount_minor,
+                  recoveredProof.currency,
+                )}
+              </div>
+              <p className="proof-description">
+                Evidence-backed Test Mode recovery through ARC-governed execution.
+              </p>
             </div>
-            <div className="proof-amount">
-              {formatMoney(
-                recoveredProof.recovered_amount_minor,
-                recoveredProof.currency,
-              )}
-            </div>
-            <p className="proof-description">
-              Captured through ARC-governed recovery
-            </p>
-            <div className="proof-meta">
-              <OriginBadge origin={recoveredProof.data_origin} />
-              <StatusBadge value={recoveredProof.current_state} />
+            <div className="proof-evidence">
+              <strong>Provider evidence verified</strong>
+              <span>Razorpay Test Mode</span>
+              <span>Evidence-backed attribution</span>
+              <div className="proof-meta">
+                <OriginBadge origin={recoveredProof.data_origin} />
+                <StatusBadge value={recoveredProof.current_state} />
+              </div>
             </div>
           </Link>
         ) : null}
       </div>
+
+      <SectionCard
+        className="demo-stories-section"
+        title="Demo recovery stories"
+        subtitle="Four persisted cases demonstrate recovery, human authority, current-state protection, and deterministic stopping."
+      >
+        {resource.loading ? (
+          <div className="demo-stories-grid" aria-label="Loading demo recovery stories">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div className="skeleton demo-story-skeleton" key={index} />
+            ))}
+          </div>
+        ) : (
+          <DemoStories stories={stories} />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        className="control-loop-section"
+        title="Recovery control loop"
+        subtitle="Financial truth and authority remain deterministic around one bounded AI stage."
+      >
+        <div className="control-loop" aria-label="ARC recovery control loop">
+          {controlSteps.map(({ label, note, icon: Icon, className }) => (
+            <div className={`control-step ${className ?? ""}`} key={label}>
+              <span className="control-step-icon">
+                <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+              </span>
+              <strong>{label}</strong>
+              <small>{note}</small>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       <SectionCard
         className="table-card"

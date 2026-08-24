@@ -105,6 +105,8 @@ The seeder makes no Razorpay or OpenAI calls and creates no Payment Link. Each s
 
 **TEST MODE != LIVE MONEY. SYNTHETIC DEMO != PROVIDER EVIDENCE.** Synthetic cases do not increase evidence-backed recovered-revenue metrics.
 
+For deterministic preflight, startup, and the recommended five-minute operator click path, use the [ARC Demo Runbook](docs/DEMO_RUNBOOK.md).
+
 ### Webhook development
 
 Configure `RAZORPAY_WEBHOOK_SECRET` in the private `.env` file. This signing secret is separate from `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, which authenticate authoritative Razorpay Test Mode entity reads. Then send Razorpay events to:

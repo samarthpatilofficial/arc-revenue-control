@@ -12,7 +12,13 @@ from arc.approval import HumanApprovalService
 from arc.assessment import CaseAssessmentService
 from arc.config import Settings, get_settings
 from arc.db.session import get_session_factory
-from arc.demo.markers import DEMO_EVENT_SOURCE, DEMO_EVENT_TYPE
+from arc.demo.markers import (
+    ALREADY_CAPTURED_PROTECTION,
+    DEMO_EVENT_SOURCE,
+    DEMO_EVENT_TYPE,
+    HARD_STOP_ATTENTION,
+    HIGH_VALUE_APPROVAL,
+)
 from arc.domain.enums import (
     CaseState,
     PolicyDecisionResult,
@@ -33,10 +39,6 @@ from arc.intelligence.service import StrategyService
 from arc.persistence import append_case_event, create_payment_case
 from arc.policy.service import MerchantAuthorizationService
 from arc.reconciliation.state_machine import transition_case
-
-HIGH_VALUE_APPROVAL = "HIGH_VALUE_APPROVAL"
-ALREADY_CAPTURED_PROTECTION = "ALREADY_CAPTURED_PROTECTION"
-HARD_STOP_ATTENTION = "HARD_STOP_ATTENTION"
 
 _HIGH_VALUE_CASE_REFERENCE = "demo_high_value_approval_v1"
 _CAPTURED_CASE_REFERENCE = "demo_already_captured_protection_v1"

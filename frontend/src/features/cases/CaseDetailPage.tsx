@@ -10,6 +10,7 @@ import { shortReference } from "../../lib/display";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
 import type { CaseDetail, TimelineItem } from "../../types/api";
+import { CaseStoryBanner } from "./CaseStoryBanner";
 import { DecisionIntelligence } from "./DecisionIntelligence";
 
 interface CasePageData {
@@ -80,6 +81,7 @@ export function CaseDetailPage() {
             <StatusBadge value={detail.case.current_state} />
             <OriginBadge origin={detail.data_origin} />
           </div>
+          <CaseStoryBanner detail={detail} />
           <div className="detail-grid">
             <DecisionIntelligence detail={detail} />
             <SectionCard

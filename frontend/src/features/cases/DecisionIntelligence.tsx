@@ -24,22 +24,9 @@ function MissingCard({ title, message }: { title: string; message: string }) {
 
 export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
   const { diagnosis, strategy, policy, approval, execution, outcome, attribution } = detail;
-  const policyStoppedWithoutAction =
-    (detail.case.current_state === "EXHAUSTED" ||
-      detail.case.current_state === "ESCALATED") &&
-    execution === null;
 
   return (
     <div className="intelligence-stack">
-      {policyStoppedWithoutAction ? (
-        <div className="attention-banner">
-          <ShieldCheck size={16} aria-hidden="true" />
-          <div>
-            <strong>Policy stopped automated recovery</strong>
-            <p>No external action was executed after the deterministic stopping rule.</p>
-          </div>
-        </div>
-      ) : null}
       <section className="intelligence-card">
         <div className="card-kicker">
           <h2>Diagnosis</h2>
@@ -182,7 +169,7 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           </dl>
           <div style={{ marginTop: 14 }}><OriginBadge origin={detail.data_origin} /></div>
         </section>
-      ) : detail.case.current_state === "RECOVERED" ? (
+      ) : detail.case.current_state === "RECOVERED" && execution !== null ? (
         <div className="attention-banner">
           <AlertTriangle size={16} aria-hidden="true" />
           <div>
