@@ -210,13 +210,13 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:5173`. The operator console is read-only. For the exact PostgreSQL preparation, optional deterministic scenario seeding, and five-minute PowerShell walkthrough, use the [ARC Demo Runbook](docs/DEMO_RUNBOOK.md).
+Open `http://localhost:5173`. The operator console is read-only. For exact PostgreSQL preparation, optional deterministic scenario seeding, and the recommended walkthrough, use the [ARC Demo Runbook](docs/DEMO_RUNBOOK.md).
 
 The repository contains no database snapshot or provider credentials. On a fresh database, preflight correctly remains `NOT READY` until the required persisted Test Mode evidence and controlled scenarios exist; it never substitutes fabricated proof.
 
 ## Final Buildathon validation
 
-Validation recorded for the accepted Task 12 revision:
+Validation recorded for the final pre-evaluation release:
 
 | Gate | Result |
 | --- | --- |

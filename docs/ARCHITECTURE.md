@@ -1,1434 +1,387 @@
 # ARC — Technical Architecture
 
-**Project:** ARC — Autonomous Revenue Control  
-**Subtitle:** Policy-Governed AI Revenue Recovery for Razorpay Merchants  
-**Hackathon Track:** Razorpay AI Buildathon — Track 03: AI Revenue Recovery  
-**Status:** Architecture baseline for the three-day build
+ARC is a policy-governed revenue-recovery control plane for Razorpay merchants. It treats payment failure as a signal to establish current truth, not as permission to retry or contact a customer.
 
----
+This document describes the implementation in this repository. Future production evolution is labelled explicitly and is not an implementation claim.
 
-## 1. Purpose of This Document
+## 1. System purpose
 
-This document defines the technical architecture for ARC.
-
-`docs/PROJECT.md` explains **what ARC is and why it exists**.  
-`AGENTS.md` explains **how Codex must behave while implementing it**.  
-This file explains **how the system is structured technically, how data moves through it, where trust boundaries exist, and which components are allowed to make which decisions**.
-
-The architecture is intentionally designed for a three-day hackathon build while preserving the engineering principles expected from a serious fintech prototype.
-
-The goal is not to imitate a large production platform with unnecessary infrastructure. The goal is to build a small system with strong boundaries, clear failure behavior, measurable outcomes, and a credible path to production evolution.
-
----
-
-## 2. Architecture Goals
-
-ARC should satisfy the following architectural goals.
-
-### 2.1 Financial state correctness
-
-The system must establish current payment truth before attempting recovery.
-
-### 2.2 Idempotent processing
-
-Duplicate webhook delivery must not create duplicate cases, duplicate decisions, or duplicate recovery actions.
-
-### 2.3 Safe event ordering
-
-Webhook arrival order must not be assumed to equal transaction-state order.
-
-### 2.4 Bounded AI
-
-AI may recommend recovery strategy, but it must not control state truth, policy enforcement, or unrestricted financial execution.
-
-### 2.5 Deterministic authorization
-
-All recovery actions must pass explicit machine-testable merchant policy before execution.
-
-### 2.6 Auditability
-
-Every meaningful external event, internal transition, decision, policy result, action, and outcome should be reconstructable.
-
-### 2.7 Graceful failure
-
-Invalid, incomplete, stale, duplicated, unsupported, or externally failed operations should not cause unsafe financial behavior.
-
-### 2.8 Measurability
-
-The architecture must support batch evaluation and direct calculation of revenue-at-risk and recovered-revenue metrics.
-
-### 2.9 Pragmatic implementation
-
-The system should remain implementable within three days using a modular monolith rather than premature distributed infrastructure.
-
----
-
-## 3. Architectural Style
-
-ARC will use a **modular monolith with event-driven domain processing**.
-
-This means:
-
-- one primary backend application;
-- clear internal modules with explicit responsibilities;
-- PostgreSQL as the authoritative persistence layer;
-- webhook events as the primary external event source;
-- synchronous processing where safe and simple during the prototype;
-- internal boundaries designed so asynchronous workers can be introduced later without rewriting the domain model.
-
-This is deliberate.
-
-ARC does **not** require Kafka, Kubernetes, Redis, Celery, or multiple microservices to demonstrate the core engineering problem.
-
-The modular-monolith approach gives us:
-
-- lower implementation risk;
-- easier local setup;
-- simpler debugging;
-- transactional integrity;
-- faster test execution;
-- clearer auditability;
-- a credible migration path if the system later needs independent workers or queues.
-
----
-
-## 4. System Context
+ARC closes an auditable recovery loop:
 
 ```text
-                         +----------------------+
-                         |    Merchant / Ops    |
-                         | dashboard + approval |
-                         +----------+-----------+
-                                    |
-                                    v
-+------------------+      +---------+----------+       +-------------------+
-| Razorpay Test    |----->|       ARC API      |------>|    OpenAI API     |
-| Mode / Webhooks  |      |  Control Plane     |       | bounded strategy  |
-+------------------+      +---------+----------+       +-------------------+
-                                    |
-                                    v
-                         +----------+-----------+
-                         |      PostgreSQL      |
-                         | source of ARC truth  |
-                         +----------------------+
+detect -> reconcile -> diagnose -> decide -> authorize -> execute -> observe -> measure
 ```
 
-External systems:
+The system is designed to prevent duplicate, stale, premature, or unauthorized recovery while preserving enough evidence to explain each decision and attribute a successful recovery exactly once.
 
-- **Razorpay Test Mode** — payment/subscription events and recovery API operations.
-- **OpenAI API** — bounded contextual strategy generation, introduced on Day 2.
-- **Merchant / Operator** — reviews recovery state and approves high-value cases when required.
+ARC is implemented as a FastAPI modular monolith with a React operator console and PostgreSQL as the concurrency, persistence, and audit authority. It does not use Redis, Celery, Kafka, or a model-controlled tool layer.
 
-Internal source of truth:
+## 2. Core principle
 
-- **PostgreSQL** — ARC event history, current recovery state, decisions, policies, action records, and evaluation data.
+> **AI proposes. Policy authorizes. The executor acts. Provider evidence proves recovery.**
 
----
+Responsibility is deliberately separated:
 
-## 5. High-Level Component Architecture
+- Razorpay reads establish provider truth.
+- deterministic eligibility and diagnosis interpret bounded facts;
+- the strategy boundary proposes one bounded action;
+- merchant policy and, when required, a human authorize that exact proposal;
+- the executor performs only the authorized operation;
+- authoritative Payment Link evidence determines recovery;
+- attribution and metrics are calculated from durable evidence.
+
+Model output never determines whether a payment is paid, grants itself authority, or increments recovered-revenue metrics.
+
+## 3. System context
 
 ```text
-                         RAZORPAY TEST MODE
-                                |
-                                v
-                    +-------------------------+
-                    |     Webhook Gateway     |
-                    | signature / event id    |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    | Immutable Event Ledger  |
-                    | persist before process  |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    |     State Reconciler    |
-                    | current financial truth |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    | Eligibility / Preconditions|
-                    | should ARC consider action?|
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    |   Failure Intelligence  |
-                    | deterministic diagnosis |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    |    AI Strategy Engine   |
-                    | bounded recommendation  |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    | Policy & Authorization  |
-                    | deterministic controls  |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    |     Action Executor     |
-                    | approved actions only   |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    |    Outcome Observer     |
-                    | success/failure/timeout |
-                    +------------+------------+
-                                 |
-                                 v
-                    +-------------------------+
-                    | Recovery Attribution    |
-                    | + Audit + Metrics       |
-                    +-------------------------+
+Razorpay Test Mode / webhooks       OpenAI Responses API
+              |                           |
+              v                           v
+        +---------------------------------------+
+        |             ARC FastAPI               |
+        | webhook, domain, policy, execution,   |
+        | outcome, audit, and read services     |
+        +-------------------+-------------------+
+                            |
+                            v
+                     +-------------+
+                     | PostgreSQL  |
+                     | source of   |
+                     | ARC truth   |
+                     +------+------+
+                            |
+                            v
+                 Read-only React console
 ```
 
-The key design rule is:
+External boundaries are:
 
-> **AI proposes. Policy authorizes. The executor acts.**
+- **Razorpay** for signed webhook triggers, authoritative payment and subscription reads, governed Standard Payment Link operations, and Payment Link outcome reads;
+- **OpenAI** for tool-free, structured strategy proposals;
+- **the operator** for viewing sanitized state; the internal approval service records policy-scoped human decisions when invoked by a trusted backend workflow;
+- **the browser** for read-only display contracts.
 
----
+The demonstrated provider-backed recovery uses Razorpay Test Mode. Provider mode is derived from private credentials and retained as `TEST` or `LIVE` on outcome evidence and attribution so metrics cannot mix modes.
 
-## 6. Backend Module Boundaries
+## 4. Recovery control loop
 
-Preferred backend module structure:
+| Stage | Implemented owner | Result |
+| --- | --- | --- |
+| Detect | webhook gateway + event ledger | Authenticated event retained once. |
+| Reconcile | Razorpay reader + reconciliation service | Current provider state projected without terminal regression. |
+| Diagnose | eligibility + failure classifier | Bounded eligibility, category, disposition, and reason codes. |
+| Decide | deterministic rule or OpenAI strategy provider | One proposal from the fixed action vocabulary. |
+| Authorize | merchant policy + optional human approval | `AUTHORIZED`, `REQUIRES_APPROVAL`, or `BLOCKED`. |
+| Execute | governed recovery executor | Internal action or one idempotent Standard Payment Link operation. |
+| Observe | outcome service | Authoritative Payment Link and captured-payment evidence. |
+| Measure | recovery attribution + read models | Exact-once, mode-scoped recovered amount and audit trace. |
+
+## 5. Trust boundaries
+
+### 5.1 Webhook trust
+
+Incoming webhook JSON is untrusted until ARC verifies `X-Razorpay-Signature` as HMAC-SHA256 over the exact raw request bytes. The event identifier is validated separately. Invalid signatures and malformed envelopes do not enter the event ledger.
+
+### 5.2 Authoritative provider state
+
+A valid webhook is a processing trigger, not financial truth. Payment and subscription signals are reconciled through authenticated Razorpay `GET` operations. Payment Link outcome events likewise trigger a fresh authoritative Payment Link read.
+
+### 5.3 AI output trust
+
+OpenAI output is untrusted until it passes strict Structured Output parsing, local Pydantic validation, the bounded action vocabulary, disposition/action compatibility, and current-state fingerprint checks. The model receives no tools.
+
+### 5.4 Policy authority
+
+The deterministic policy engine owns action allowlists, automation controls, recovery windows, attempt and contact limits, stopping rules, amount thresholds, and approval requirements. Model confidence is observability metadata and is not an authorization input.
+
+### 5.5 Execution authority
+
+The executor accepts the current unsuperseded strategy and policy decision, or an exact approved human-approval record. It recomputes current authorization before any operation and again after an external request.
+
+### 5.6 Outcome evidence
+
+Recovery requires matching provider identity, stable reference, amount, currency, amount paid, and captured-payment evidence. A created action or paid-looking webhook alone does not qualify.
+
+## 6. Current component architecture
+
+The backend is organized by responsibility under `arc/`:
+
+| Module | Implemented responsibility |
+| --- | --- |
+| `arc/config.py` | Typed environment settings and secret wrappers. |
+| `arc/db/` | SQLAlchemy metadata, engine, and session lifecycle. |
+| `arc/domain/` | Controlled enums and persisted SQLAlchemy models. |
+| `arc/persistence/` | Race-safe event, case, policy, and audit persistence helpers. |
+| `arc/reconciliation/` | Event claims, Razorpay reads, state projection, and lifecycle guards. |
+| `arc/assessment.py` | Transactional eligibility and diagnosis projection. |
+| `arc/diagnosis/` | Deterministic structured failure classification. |
+| `arc/intelligence/` | Minimum-data context, strict strategy schema, compatibility, fingerprints, and proposal service. |
+| `arc/integrations/openai/` | Tool-free OpenAI Responses API adapter. |
+| `arc/policy/` | Strict policy parsing, pure authorization rules, fingerprints, and persisted decisions. |
+| `arc/approval/` | Decision-scoped human approval and permission checks. |
+| `arc/execution/` | Idempotent action ledger, execution lease, provider fencing, and compensation. |
+| `arc/integrations/razorpay/` | Webhook security, bounded entity reads, and Standard Payment Link gateway. |
+| `arc/outcomes/` | Provider evidence classification, observation, attribution, and metrics. |
+| `arc/read_models/` | Display-safe projections for the operator API. |
+| `arc/demo/` | Controlled scenario seeding and read-only semantic preflight. |
+
+`services/api/` contains the FastAPI application, dependencies, health route, Razorpay webhook ingress, and read-only operator routes. `frontend/` contains the React and TypeScript operator console. `migrations/` contains the Alembic schema history.
+
+The domain modules do not depend on FastAPI request objects. External adapters implement narrow protocols so tests can exercise provider behavior without network access.
+
+## 7. Persistence model
+
+PostgreSQL stores ten principal tables:
+
+| Table | Purpose and important controls |
+| --- | --- |
+| `webhook_events` | Immutable accepted payload ledger; unique Razorpay event id; raw-body and canonical-payload hashes; processing status, lease, attempts, and sanitized error. |
+| `payment_cases` | Current reconciled case projection; deterministic case reference; amount in minor units; lifecycle, assessment, failure, and exact attempt/contact counters. |
+| `case_events` | Append-only internal audit timeline with bounded event types and structured metadata. |
+| `strategy_proposals` | Append-friendly rule/AI proposals; one current proposal per case; input fingerprints and bounded model metadata. |
+| `merchant_policies` | Merchant action allowlist, automation controls, limits, thresholds, recovery window, and typed stopping-rule JSON. |
+| `policy_decisions` | Exact deterministic authorization result and observed inputs; one current decision per case. |
+| `approval_requests` | One irreversible, decision-scoped pending/approved/rejected human decision. |
+| `recovery_actions` | Idempotent execution intent, lease, attempt count, sanitized provider projection, and final execution state. |
+| `recovery_outcome_observations` | Append-friendly normalized authoritative Payment Link evidence, unique per action and evidence fingerprint. |
+| `recovery_attributions` | Exact-once recovered amount linked to one action, one observation, and one unique provider payment. |
+
+Database uniqueness and check constraints are correctness controls, not only validation conveniences. Timestamps are timezone-aware and financial amounts use integer minor units.
+
+`webhook_events` rejects updates to accepted payload and identity fields. `case_events` rejects updates and deletes. Operational status fields remain mutable where crash recovery requires it.
+
+## 8. Webhook processing and crash-safe lease
+
+`POST /webhooks/razorpay` performs this sequence:
 
 ```text
-arc/
-|-- domain/
-|   |-- states.py
-|   |-- events.py
-|   |-- cases.py
-|   |-- decisions.py
-|   `-- actions.py
-|
-|-- ingestion/
-|   `-- webhook_service.py
-|
-|-- reconciliation/
-|   `-- payment_reconciler.py
-|
-|-- diagnosis/
-|   `-- failure_classifier.py
-|
-|-- policy/
-|   |-- eligibility.py
-|   `-- authorization.py
-|
-|-- intelligence/
-|   |-- strategy_service.py
-|   `-- schemas.py
-|
-|-- execution/
-|   |-- action_executor.py
-|   `-- recovery_link.py
-|
-`-- audit/
-    |-- case_timeline.py
-    `-- attribution.py
+read exact bytes
+  -> verify current/previous webhook secret
+  -> parse strict JSON envelope
+  -> validate event id and bounded identifiers
+  -> insert immutable event with PostgreSQL ON CONFLICT
+  -> return a payload-free acknowledgement
 ```
 
-Integration code belongs outside the domain layer:
+Supported event families are payment failure/capture, subscription pending/halted, and Payment Link paid/cancelled/expired/partially-paid triggers. Valid unknown event types are retained as `UNSUPPORTED` and do not enter financial processing.
+
+Business processing uses `SELECT ... FOR UPDATE` to claim the event. A claim moves `RECEIVED` or `FAILED` to `PROCESSING`, sets `processing_started_at`, increments `processing_attempt_count`, and clears stale error metadata.
+
+The processing lease is 120 seconds:
+
+- a recent `PROCESSING` claim returns `EVENT_ALREADY_PROCESSING`;
+- a missing or expired lease is reclaimed transactionally;
+- completion checks the claim attempt number so an abandoned worker cannot overwrite a newer claim;
+- handled failures become retryable `FAILED` rows with bounded, sanitized errors;
+- successful rows become idempotent `PROCESSED` rows.
+
+No distributed queue or background worker is required for this crash-recovery property.
+
+## 9. Reconciliation and terminal non-regression
+
+The Razorpay adapter exposes bounded `GET` readers for payments and subscriptions. Responses are projected into strict Pydantic snapshots while unknown future status strings are preserved for fail-safe handling.
+
+Payment reconciliation:
+
+- creates one deterministic case for a confirmed failed payment;
+- refreshes structured amount, currency, method, customer correlation, and failure fields from provider truth;
+- moves captured truth to `RECOVERED` and refunded truth to `EXHAUSTED`;
+- does not create a recovery case for a standalone confirmed capture;
+- retains non-final or unrecognized truth without advancing recovery.
+
+Subscription reconciliation:
+
+- treats `pending` as active platform retry;
+- treats `halted` as exhausted platform retry and eligible for assessment;
+- resolves active truth without competing recovery;
+- stops terminal cancelled/completed/expired truth.
+
+The explicit state machine allows forward or authoritative terminal transitions only. `RECOVERED`, `EXHAUSTED`, and `ESCALATED` are terminal. A later failure signal cannot move a terminal case backwards.
+
+## 10. Eligibility and deterministic diagnosis
+
+Eligibility is evaluated from persisted, recently reconciled facts. The assessment freshness window is five minutes. Results are one of:
+
+- `ELIGIBLE` — confirmed failed payment or halted subscription;
+- `WAIT` — reconciliation required/stale, non-final payment, active retry, or another pending state;
+- `STOP` — already captured, refunded, active, or terminal;
+- `REVIEW` — missing, conflicting, malformed, or unknown current truth.
+
+Only `ELIGIBLE` cases are diagnosed. The classifier uses structured `error_reason`, then `error_source`, then `error_step`; it never machine-classifies `error_description`. Implemented categories cover customer authentication, funds, interruption, instrument restriction, bank/issuer, gateway/network, merchant configuration, platform issues, subscription retry exhaustion, and unknown context.
+
+Assessment inputs are fingerprinted. Reassessment preserves historical bounded values in append-only `CaseEvent` rows while updating the current case projection.
+
+## 11. AI Strategy Engine
+
+The strategy service receives only validated, PII-minimized context:
+
+- amount and currency;
+- normalized payment method and current status;
+- bounded failure category, disposition, and reason code;
+- structured error reason/source/step;
+- attempt count and payment/subscription kind.
+
+The OpenAI adapter uses the Responses API with:
+
+- strict JSON Schema Structured Outputs;
+- `store: false`;
+- no tools;
+- bounded output tokens and request timeout;
+- a fixed developer instruction separated from serialized case data;
+- local schema validation after the response.
+
+The action vocabulary is:
 
 ```text
-integrations/
-`-- razorpay/
-    |-- client.py
-    |-- signature.py
-    |-- schemas.py
-    `-- mapper.py
+NO_ACTION
+WAIT
+REQUEST_RETRY
+CREATE_RECOVERY_LINK
+REQUEST_PAYMENT_METHOD_UPDATE
+ESCALATE_TO_HUMAN
 ```
 
-The domain layer must not depend directly on HTTP request objects, FastAPI, Razorpay SDK internals, or OpenAI SDK objects.
+Unknown/manual-review/merchant-fix dispositions bypass AI and produce a deterministic human escalation. Other model actions must match the disposition compatibility matrix.
 
----
+Inference occurs outside a database transaction. Before persistence, ARC row-locks the case and recomputes assessment context and fingerprints. Changed truth causes the proposal to be discarded and audited as stale.
 
-## 7. Trust Boundaries
+## 12. Deterministic policy and human approval
 
-ARC operates across three primary trust boundaries.
+Merchant policy is parsed into a strict typed configuration. Malformed JSON, unknown actions, invalid values, or missing policy fail closed for external recovery.
 
-### 7.1 External payment event boundary
+Authorization applies hard-stop-first precedence:
 
-Incoming webhook payloads are untrusted until signature verification succeeds.
+1. internal `NO_ACTION`, `WAIT`, and `ESCALATE_TO_HUMAN` remain safety-preserving;
+2. external actions require a valid configured policy and allowlist membership;
+3. failure-category and payment-method stopping rules block first;
+4. recovery-window, automated-attempt, and customer-contact limits block;
+5. missing amount blocks external recovery;
+6. configured action or amount thresholds require approval;
+7. disabled automation requires approval;
+8. only then is an external action authorized.
 
-Required controls:
+Hard-stop decisions move a case to `EXHAUSTED`; other blocked decisions escalate. Authorized and approval-required decisions remain `POLICY_VALIDATED` but have distinct decision records.
 
-- retain raw request body;
-- validate signature before financial-state mutation;
-- capture Razorpay event id;
-- reject invalid signature;
-- never trust user-controlled payload fields simply because JSON parsing succeeds.
+A human approval is bound to one exact current policy decision. Approval cannot transfer to a reevaluated decision, reverse after reaching a terminal choice, or bypass current case and policy validation. Rejection escalates the case. Approval grants executor permission only for that exact decision.
 
-### 7.2 AI boundary
+## 13. Governed execution
 
-Model output is untrusted until schema and policy validation succeed.
+Execution uses a durable action ledger and never accepts raw model output. The service recomputes assessment, strategy, policy, counters, amount, recovery window, and approval before claiming work.
 
-Required controls:
+Safety controls include:
 
-- structured output;
-- strict enum action vocabulary;
-- bounded confidence fields;
-- required reason code;
-- no arbitrary tool names;
-- no arbitrary URLs or API payloads;
-- deterministic policy validation after model output;
-- safe fallback on timeout or malformed output.
+- one recovery action per policy decision;
+- a SHA-256 idempotency key bound to the exact proposal and authorization;
+- a request fingerprint covering the complete PII-free operation;
+- a stable `arc_...` reference generated before any provider write;
+- a 120-second database execution lease with stale reclaim;
+- lookup-by-reference before Payment Link creation;
+- adoption of one matching existing link after an uncertain write;
+- refusal to create when lookup is unavailable or ambiguous;
+- no customer PII, notifications, reminders, or partial payments in the request;
+- post-request state and authorization fencing;
+- cancellation compensation when truth changed during a provider write.
 
-### 7.3 Execution boundary
+Attempt and contact counters increment exactly once, only after a provider action is confirmed and persisted. Duplicate calls return the same action row without another external operation or counter increment.
 
-A valid recommendation is still not permission to act.
+`WAIT`, `NO_ACTION`, and `ESCALATE_TO_HUMAN` have bounded internal executors. `CREATE_RECOVERY_LINK` is the implemented external executor. `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` fail safely as unimplemented executor actions.
 
-The action executor accepts only a policy-authorized internal action object, not raw model output.
+## 14. Outcome observation and recovery attribution
 
----
+Outcome observation is a two-transaction operation:
 
-## 8. Webhook Processing Flow
+1. row-lock and validate the action/case, then commit;
+2. fetch the Payment Link outside a database transaction;
+3. row-lock again, verify context is unchanged, classify evidence, and persist.
 
-The webhook path is one of ARC's most important correctness boundaries.
+A recovered classification requires all of the following:
+
+- expected Payment Link id;
+- expected stable reference;
+- exact amount and currency;
+- provider status `paid`;
+- `amount_paid` equal to the expected amount;
+- exactly one captured payment for the expected amount;
+- no conflicting Payment Link identity.
+
+Partial payment, ambiguity, mismatch, or unknown provider status becomes `REVIEW_REQUIRED`. Expired or cancelled zero-paid links exhaust a waiting case without attribution.
+
+Attribution is unique by recovery action, outcome observation, and provider payment id. It is created only with `ARC_PAYMENT_LINK_CAPTURED` evidence. Existing recovery or attribution conflicts fail into review rather than double-counting.
+
+Every observation and attribution stores `TEST` or `LIVE` provider mode. Metrics require an explicit mode and currency, so Test Mode proof cannot be reported as Live revenue.
+
+## 15. Read API and frontend trust boundary
+
+The implemented API surface is:
 
 ```text
-HTTP POST /webhooks/razorpay
-        |
-        v
-Read raw body
-        |
-        v
-Verify signature
-        |
-        +---- invalid ----> reject request / no case mutation
-        |
-        v
-Read event identifier
-        |
-        v
-Check / insert event ledger row
-        |
-        +---- duplicate ---> return idempotent success / no duplicate processing
-        |
-        v
-Persist event
-        |
-        v
-Process event
-        |
-        v
-Create/update payment case
-        |
-        v
-Append internal case event
-        |
-        v
-Mark webhook event processed or failed
-```
-
-### Store first, process second
-
-A valid accepted webhook should be durably recorded before complex business processing.
-
-If processing fails after persistence, ARC should retain:
-
-- original event;
-- processing status;
-- error details;
-- ability to inspect/retry manually or through a later worker.
-
----
-
-## 9. Event Idempotency Design
-
-ARC requires idempotency at more than one layer.
-
-### 9.1 Event-level idempotency
-
-`webhook_events.razorpay_event_id` should have a database unique constraint.
-
-This protects against:
-
-- webhook redelivery;
-- concurrent duplicate requests;
-- application-level race conditions.
-
-Application checks alone are not sufficient; the database constraint is the final authority.
-
-### 9.2 Case-level idempotency
-
-Multiple legitimate events about the same payment should update the same logical recovery case rather than create unrelated duplicate cases.
-
-The case lookup strategy should use payment/subscription identifiers and explicit domain rules.
-
-### 9.3 Action-level idempotency
-
-Day 2 action execution must have its own idempotency protection.
-
-A duplicate model decision, retry, or API request must not create a second recovery action.
-
-Recommended internal key concept:
-
-```text
-action_idempotency_key = case_id + action_type + strategy_version/recovery_attempt
-```
-
-Exact implementation may evolve, but action execution must be independently protected from event ingestion.
-
----
-
-## 10. State Reconciliation
-
-State reconciliation determines **current truth** before ARC decides what to do.
-
-This layer must be deterministic.
-
-It should answer:
-
-- What case does this event belong to?
-- What is the current ARC state?
-- Is the incoming event newer, stale, duplicate, or terminally superseded?
-- Has the payment already succeeded?
-- Is the case still recoverable?
-
-### Important invariant
-
-A successful/captured payment must not be moved backward into failed/recovery state because a stale `payment.failed` event arrives later.
-
-Possible implementation strategies:
-
-- explicit event precedence rules;
-- terminal-state guards;
-- reconciliation against known current payment state when necessary;
-- timestamps only as supporting signals, never as the sole correctness mechanism.
-
-The reconciler should produce an explicit result object, for example:
-
-```text
-ReconciliationResult
-- case_id
-- previous_state
-- resolved_state
-- changed: bool
-- reason_code
-- should_continue_processing: bool
-```
-
----
-
-## 11. Recovery Lifecycle State Machine
-
-ARC case lifecycle:
-
-```text
-DETECTED
-   |
-   v
-RECONCILING
-   |
-   v
-DIAGNOSED
-   |
-   v
-DECISIONED
-   |
-   v
-POLICY_VALIDATED
-   |
-   v
-ACTIONED
-   |
-   v
-WAITING_FOR_OUTCOME
-   |
-   +-------------+-------------+
-   |             |             |
-   v             v             v
-RECOVERED     EXHAUSTED     ESCALATED
-```
-
-### Transition design
-
-State transition validity should live in one explicit domain policy rather than ad-hoc assignments throughout services.
-
-Example rules:
-
-- `DETECTED -> RECONCILING` allowed;
-- `RECONCILING -> DIAGNOSED` allowed;
-- `DIAGNOSED -> DECISIONED` allowed;
-- `DECISIONED -> POLICY_VALIDATED` allowed;
-- `POLICY_VALIDATED -> ACTIONED` allowed when approved;
-- `POLICY_VALIDATED -> ESCALATED` allowed when approval required;
-- `ACTIONED -> WAITING_FOR_OUTCOME` allowed;
-- `WAITING_FOR_OUTCOME -> RECOVERED` allowed;
-- `WAITING_FOR_OUTCOME -> EXHAUSTED` allowed;
-- any active state -> `RECOVERED` may be allowed when authoritative successful payment truth arrives;
-- `RECOVERED -> DIAGNOSED` must not be allowed.
-
-The implementation should test invalid transitions explicitly.
-
----
-
-## 12. Failure Intelligence
-
-Failure intelligence interprets payment failure data using deterministic logic before AI is involved.
-
-Input signals may include:
-
-- error code;
-- error description;
-- error source;
-- error step;
-- error reason;
-- payment method;
-- subscription state;
-- attempt count.
-
-The classifier should produce a normalized category and reason code.
-
-Example categories:
-
-```text
-CUSTOMER_FUNDS
-CUSTOMER_AUTHENTICATION
-PAYMENT_INSTRUMENT
-ISSUER_OR_BANK
-GATEWAY_OR_NETWORK
-PLATFORM_RETRY_ACTIVE
-RETRY_EXHAUSTED
-UNKNOWN_OR_INCOMPLETE
-```
-
-These names are internal design candidates and may be refined during implementation.
-
-The important requirement is that downstream components receive structured diagnosis rather than relying on free-form text parsing.
-
----
-
-## 13. Eligibility / Preconditions Gate
-
-The eligibility gate runs before AI strategy generation where possible.
-
-Its job is to avoid unnecessary AI calls and prevent obviously invalid recovery attempts.
-
-Example rules:
-
-```text
-IF payment already captured
-THEN NO_ACTION
-
-IF duplicate event
-THEN NO_NEW_PROCESSING
-
-IF subscription retry still active
-THEN WAIT
-
-IF stale event after terminal success
-THEN NO_ACTION
-
-IF required identifiers missing
-THEN MANUAL_REVIEW / SAFE_HOLD
-
-IF case exhausted by policy
-THEN EXHAUSTED
-```
-
-The eligibility result should be persisted as part of the decision/audit history where meaningful.
-
----
-
-## 14. AI Strategy Engine
-
-The AI Strategy Engine is introduced only after the Day 1 deterministic core is stable.
-
-### Input contract
-
-The model should receive only the context needed for strategy generation.
-
-Candidate input:
-
-```json
-{
-  "case_id": "RC-1024",
-  "amount": 18500,
-  "currency": "INR",
-  "payment_method": "card",
-  "failure_category": "PAYMENT_INSTRUMENT",
-  "failure_reason": "...",
-  "attempt_count": 3,
-  "subscription_state": "halted",
-  "recovery_attempts": 0,
-  "time_since_failure_seconds": 420,
-  "merchant_policy_summary": {
-    "max_automated_attempts": 2,
-    "approval_threshold": 25000,
-    "allowed_actions": [
-      "NO_ACTION",
-      "WAIT",
-      "CREATE_RECOVERY_LINK",
-      "ESCALATE_TO_HUMAN"
-    ]
-  }
-}
-```
-
-### Output contract
-
-The model must return structured output matching a strict schema.
-
-Candidate output:
-
-```json
-{
-  "action": "CREATE_RECOVERY_LINK",
-  "reason_code": "RETRY_EXHAUSTED_VALID_CUSTOMER",
-  "explanation": "Platform retries are exhausted and the case remains recoverable through a fresh payment path.",
-  "confidence": 0.91,
-  "requires_human_approval": false,
-  "re_evaluate_after_seconds": null
-}
-```
-
-### Bounded action vocabulary
-
-Initial values:
-
-- `NO_ACTION`
-- `WAIT`
-- `REQUEST_RETRY`
-- `CREATE_RECOVERY_LINK`
-- `REQUEST_PAYMENT_METHOD_UPDATE`
-- `ESCALATE_TO_HUMAN`
-
-### Failure behavior
-
-If the model:
-
-- times out;
-- returns invalid JSON;
-- returns an unknown action;
-- violates schema;
-- produces insufficient reasoning;
-
-ARC must not execute a recovery action automatically.
-
-Safe fallback options include:
-
-- deterministic `WAIT`;
-- `ESCALATE_TO_HUMAN`;
-- retrying model generation within a bounded limit;
-- marking strategy generation failed for operator review.
-
----
-
-## 15. Policy & Authorization Engine
-
-This layer is the final deterministic authority before execution.
-
-Inputs:
-
-- current reconciled case state;
-- proposed action;
-- merchant policy;
-- recovery attempt history;
-- action history;
-- approval threshold;
-- case amount;
-- stop conditions.
-
-Example rules:
-
-```text
-IF automation_enabled = false
-THEN require human approval
-
-IF proposed_action not in allowed_actions
-THEN reject
-
-IF payment already captured
-THEN reject
-
-IF automated_attempts >= max_automated_attempts
-THEN reject or escalate
-
-IF amount >= approval_threshold
-THEN require human approval
-
-IF same action already executed for same attempt
-THEN reject duplicate
-
-IF recovery window expired
-THEN escalate or exhaust
-```
-
-Output should be explicit:
-
-```text
-PolicyDecision
-- result: APPROVED | REJECTED | REQUIRES_APPROVAL
-- reason_code
-- explanation
-- evaluated_rules
-- evaluated_at
-```
-
-The AI model must not be able to override this result.
-
----
-
-## 16. Action Execution
-
-The action executor performs only policy-authorized actions.
-
-The executor should expose explicit typed functions rather than arbitrary tool invocation.
-
-Example interface:
-
-```text
-execute_wait(...)
-execute_request_retry(...)
-execute_create_recovery_link(...)
-execute_request_payment_method_update(...)
-execute_escalation(...)
-```
-
-For the hackathon, the most important externally exercised action is expected to be a Razorpay Test Mode recovery payment path such as a Payment Link where appropriate.
-
-Execution requirements:
-
-- idempotency;
-- policy authorization reference;
-- case-state validation immediately before execution;
-- API error capture;
-- response persistence;
-- audit event creation;
-- no secret leakage into logs.
-
-### Pre-execution recheck
-
-Before performing an externally visible recovery action, the executor should confirm that the case has not already become terminal/successful.
-
-This reduces the risk of executing a recovery request after a late `payment.captured` event.
-
----
-
-## 17. Human Approval Path
-
-High-value or policy-sensitive cases may require operator approval.
-
-Architecture flow:
-
-```text
-AI / Rule Recommendation
-        |
-        v
-Policy = REQUIRES_APPROVAL
-        |
-        v
-Case -> ESCALATED / approval queue
-        |
-        v
-Operator reviews
-        |
-        +---- reject ----> decision/audit recorded
-        |
-        v
-approve
-        |
-        v
-revalidate current state + policy
-        |
-        v
-Action Executor
-```
-
-Approval must not bypass state revalidation.
-
-A case may have changed between recommendation time and human approval time.
-
----
-
-## 18. Outcome Observation
-
-ARC must observe what happens after action execution.
-
-Sources of outcome truth may include:
-
-- subsequent Razorpay webhooks;
-- explicit Razorpay API state checks where required;
-- controlled test-mode simulation for scenarios that cannot be exercised directly.
-
-Outcome types may include:
-
-```text
-PAYMENT_RECOVERED
-PAYMENT_FAILED_AGAIN
-STILL_PENDING
-CUSTOMER_ACTION_REQUIRED
-ACTION_CANCELLED
-RECOVERY_EXHAUSTED
-ESCALATED
-```
-
-Outcome processing must use the same reconciliation rules as initial event processing.
-
----
-
-## 19. Recovery Attribution
-
-ARC should distinguish between:
-
-- revenue that was at risk;
-- revenue for which ARC initiated a recovery workflow;
-- revenue that recovered independently before ARC acted;
-- revenue recovered after ARC action;
-- revenue unresolved/exhausted.
-
-This is essential for credible evaluation.
-
-Suggested attribution fields/concepts:
-
-```text
-case_id
-amount_at_risk
-recovery_action_id
-recovery_started_at
-payment_captured_at
-attribution_status
-attributed_recovered_amount
-```
-
-Candidate attribution statuses:
-
-```text
-NOT_APPLICABLE
-RECOVERED_WITHOUT_ARC_ACTION
-ARC_ACTION_ASSOCIATED
-UNRESOLVED
-EXHAUSTED
-```
-
-The exact attribution rule must be documented and applied consistently across the batch evaluation.
-
-The prototype must not claim causal certainty beyond what the implemented test scenario supports.
-
----
-
-## 20. Audit Model
-
-ARC uses two related histories.
-
-### External event history
-
-`webhook_events`
-
-Records what external systems sent ARC.
-
-### Internal case history
-
-`case_events`
-
-Records what ARC did with that information.
-
-Example internal event sequence:
-
-```text
-CASE_DETECTED
-STATE_RECONCILED
-FAILURE_DIAGNOSED
-ELIGIBILITY_EVALUATED
-STRATEGY_GENERATED
-POLICY_APPROVED
-ACTION_EXECUTED
-OUTCOME_OBSERVED
-CASE_RECOVERED
-```
-
-Each important event should include timestamp and structured metadata.
-
-Audit entries should be append-oriented.
-
-Do not silently mutate historical decisions to make current state look cleaner.
-
----
-
-## 21. Persistence Architecture
-
-PostgreSQL is the system of record for ARC.
-
-Core tables:
-
-```text
-webhook_events
-payment_cases
-case_events
-decisions
-merchant_policies
-```
-
-Day 2 may introduce an action execution table if required.
-
-Recommended additional concept:
-
-```text
-recovery_actions
-```
-
-Possible fields:
-
-- id;
-- case_id;
-- action_type;
-- status;
-- idempotency_key;
-- policy_decision_id;
-- external_reference;
-- request metadata;
-- response metadata;
-- executed_at;
-- completed_at;
-- error code/message.
-
-This separates strategy decisions from externally executed operations.
-
-### Transaction boundaries
-
-Where practical, use database transactions to ensure logically related updates remain consistent, for example:
-
-- create webhook ledger row + mark duplicate status;
-- create/update case + append case event;
-- persist policy decision + create action intent.
-
-External API calls should not remain inside long database transactions.
-
-Recommended pattern:
-
-1. validate current state;
-2. persist action intent;
-3. commit;
-4. call external API;
-5. persist result;
-6. append audit event.
-
----
-
-## 22. API Surface
-
-Initial API surface should stay small.
-
-### System
-
-```text
-GET /health
-```
-
-### Razorpay integration
-
-```text
+GET  /health
 POST /webhooks/razorpay
+GET  /api/v1/dashboard/summary
+GET  /api/v1/cases
+GET  /api/v1/cases/{case_reference}
+GET  /api/v1/cases/{case_reference}/timeline
+GET  /api/v1/approvals
+GET  /api/v1/recovery-actions
 ```
 
-### Operator / dashboard APIs — Day 2
+The operator endpoints use closed Pydantic response models. They omit credentials, customer and merchant identifiers, provider payment identifiers, Payment Link URLs, raw webhook/provider payloads, fingerprints, and idempotency keys.
 
-Candidate endpoints:
+The React console performs display and navigation only. It does not reproduce financial policy, call Razorpay/OpenAI, or expose mutation controls. CORS is deny-by-default; configured origins must be explicit HTTP(S) origins and only `GET` methods are allowed cross-origin.
 
-```text
-GET  /api/cases
-GET  /api/cases/{case_id}
-GET  /api/cases/{case_id}/timeline
-GET  /api/metrics
-GET  /api/approvals
-POST /api/approvals/{case_id}/approve
-POST /api/approvals/{case_id}/reject
-```
+Historical timeline items are rendered from bounded values stored with each event. Arbitrary `event_data`, assessment evidence, external statuses, and fingerprints are not passed through to display output.
 
-### Evaluation — internal/admin
+## 16. Demonstration and synthetic-data separation
 
-Candidate endpoints or CLI commands:
+The repository supports two distinct demonstration evidence classes:
 
-```text
-POST /api/evaluation/run
-GET  /api/evaluation/{run_id}
-```
+- a provider-backed Razorpay Test Mode recovery with authoritative observation and attribution;
+- three controlled `SYNTHETIC_DEMO` safety scenarios for approval, already-captured protection, and hard stopping.
 
-A CLI batch runner may be simpler and is acceptable for the hackathon.
+Synthetic scenario seeding is disabled unless `ARC_DEMO_MODE=true`. The seeder is idempotent and makes no Razorpay or OpenAI request. Reserved audit markers label synthetic cases, and preflight verifies that they have no provider attribution and do not affect evidence-backed recovery metrics.
 
-Do not create endpoints merely because CRUD generation is easy.
+`python -m scripts.demo_preflight` runs inside a PostgreSQL read-only transaction. It checks the real Test Mode attribution, controlled scenarios, evidence consistency, mode isolation, and sanitized output. It does not seed, execute, or observe anything.
 
----
+## 17. Security properties
 
-## 23. Dashboard Architecture
+Implemented security and financial-safety properties include:
 
-The frontend should consume backend APIs and should not duplicate financial decision logic.
+- environment-only secrets represented by Pydantic `SecretStr`;
+- exact-body webhook HMAC verification with bounded secret rotation;
+- immutable accepted webhook identity and payload fields;
+- PostgreSQL uniqueness for event, proposal, decision, action, observation, and attribution identities;
+- row locks and leases for crash-safe claims;
+- no full provider payload logging or persistence outside the immutable webhook ledger;
+- sanitized external error classes and bounded persisted errors;
+- PII-minimized OpenAI and Payment Link requests;
+- no model tools or arbitrary action names;
+- deterministic terminal-state, policy, approval, and counter authority;
+- evidence-based, mode-scoped revenue metrics;
+- read-model allowlists instead of persistence-object serialization.
 
-The web application should be a thin operator interface over ARC state.
+## 18. Current limitations
 
-Primary views:
+- Provider-backed proof is Razorpay Test Mode, not live merchant money.
+- The operator console is read-only and has no approval or execution controls.
+- There is no production operator identity, authentication, authorization, or tenant isolation.
+- There is no automatic polling scheduler or background worker.
+- `REQUEST_RETRY` and `REQUEST_PAYMENT_METHOD_UPDATE` have no external executor.
+- Partial-payment attribution is not supported.
+- ARC does not capture or refund payments.
+- ARC sends no customer communications.
+- PostgreSQL is required for integration tests and operational persistence.
 
-```text
-Overview / Revenue Control
-Recovery Cases
-Case Detail / Decision Trace
-Human Approvals
-Evaluation Results
-```
+## 19. Future production evolution — not implemented
 
-The frontend must not:
+A production deployment would require authenticated multi-tenant operator access, managed secret storage, encrypted sensitive fields, stronger observability and alerting, scheduled outcome polling, explicit retry operations, operational reconciliation tooling, and deployment-specific availability controls.
 
-- infer whether a case is safe to recover;
-- reconstruct policy logic independently;
-- call Razorpay directly with secrets;
-- call OpenAI directly from the browser.
+At higher traffic, the durable PostgreSQL ledger and idempotent service boundaries could feed queue-backed workers. No queue, distributed worker, production IAM, or deployment topology is implemented in this repository.
 
-All sensitive integrations belong in the backend.
+## 20. Architectural invariant
 
----
+For every recovery case, ARC is designed to answer:
 
-## 24. Security Architecture
+> **What happened? What is true now? Why was this action proposed? Was it allowed? What was executed? What provider evidence exists? What amount, if any, can be attributed?**
 
-### Secret management
-
-Required environment variables may include:
-
-```text
-DATABASE_URL
-RAZORPAY_KEY_ID
-RAZORPAY_KEY_SECRET
-RAZORPAY_WEBHOOK_SECRET
-OPENAI_API_KEY
-```
-
-Only `.env.example` belongs in Git.
-
-Actual values must never be committed.
-
-### Logging
-
-Logs must avoid:
-
-- full secrets;
-- authorization headers;
-- private keys;
-- unnecessary customer-sensitive fields.
-
-### Webhook security
-
-Invalid signature must result in rejection before financial-state mutation.
-
-### AI security
-
-Model output must be treated as untrusted input.
-
-### Operator actions
-
-For hackathon scope, authentication may be intentionally simplified, but the limitation must be documented. Do not pretend the prototype has enterprise IAM if it does not.
-
----
-
-## 25. Observability
-
-ARC should provide enough visibility to debug and demonstrate behavior.
-
-Minimum observability:
-
-- structured application logs;
-- correlation by webhook event id;
-- correlation by recovery case id;
-- action id/reference;
-- processing status;
-- processing error;
-- decision reason codes;
-- policy result;
-- outcome result.
-
-Useful structured log context:
-
-```text
-request_id
-event_id
-case_id
-action_id
-event_type
-case_state
-reason_code
-```
-
-Do not build a full observability platform for the hackathon.
-
----
-
-## 26. Testing Architecture
-
-ARC should use layered tests.
-
-### 26.1 Unit tests
-
-Target pure or nearly pure logic:
-
-- state transitions;
-- failure classification;
-- eligibility rules;
-- policy authorization;
-- strategy schema validation;
-- recovery attribution.
-
-### 26.2 Integration tests
-
-Target boundaries:
-
-- FastAPI webhook endpoint;
-- signature validation;
-- database persistence;
-- event uniqueness;
-- case update flow;
-- out-of-order event behavior;
-- action persistence;
-- approval flow.
-
-### 26.3 Contract tests / mocked external tests
-
-Target:
-
-- Razorpay API client request/response mapping;
-- OpenAI structured output handling;
-- error/timeout handling.
-
-### 26.4 Live Test Mode verification
-
-Where practical, exercise real Razorpay Test Mode behavior for the final demo.
-
-Do not label a mocked test as live integration.
-
----
-
-## 27. Required Adversarial Scenarios
-
-The architecture must be able to survive these scenarios:
-
-### Duplicate webhook
-
-Expected:
-
-- one external event processed;
-- duplicate acknowledged safely;
-- no duplicate case/action.
-
-### Out-of-order event
-
-Example:
-
-```text
-payment.captured
-payment.failed
-```
-
-Expected:
-
-- case remains successful/resolved;
-- stale failure recorded but cannot regress state.
-
-### Late capture
-
-Example:
-
-```text
-payment.failed
-ARC begins evaluation
-payment.captured
-```
-
-Expected:
-
-- pending recovery becomes unnecessary;
-- action blocked/cancelled before unsafe duplicate customer request where possible.
-
-### AI malformed output
-
-Expected:
-
-- schema rejection;
-- no execution;
-- safe fallback or escalation.
-
-### AI timeout
-
-Expected:
-
-- bounded retry or fallback;
-- no uncontrolled action.
-
-### Razorpay API error
-
-Expected:
-
-- action recorded as failed;
-- error captured;
-- case remains recoverable/reviewable;
-- no false success metric.
-
-### Duplicate action execution request
-
-Expected:
-
-- idempotency prevents second external action.
-
-### High-value action
-
-Expected:
-
-- policy returns `REQUIRES_APPROVAL`;
-- no automatic action before approval.
-
-### Missing context
-
-Expected:
-
-- safe hold/manual review rather than invented data.
-
----
-
-## 28. Batch Evaluation Architecture
-
-The evaluation system should use the same domain services as the live system wherever possible.
-
-Do not create a separate simplified evaluation implementation that bypasses production logic.
-
-Suggested flow:
-
-```text
-Synthetic Scenario Generator
-        |
-        v
-Scenario Dataset
-        |
-        v
-ARC Processing Services
-        |
-        v
-Outcome Simulation / Test Mode Events
-        |
-        v
-Recovery Attribution
-        |
-        v
-Evaluation Aggregator
-        |
-        v
-JSON/CSV + Dashboard Metrics
-```
-
-Scenario dataset should include approximately 100–250 cases depending on available time.
-
-Metrics may include:
-
-- cases evaluated;
-- revenue evaluated;
-- revenue at risk;
-- workflows initiated;
-- no-action decisions;
-- wait decisions;
-- human escalations;
-- duplicate actions prevented;
-- premature actions prevented;
-- recovered cases;
-- recovered amount;
-- recovery rate;
-- unresolved amount;
-- model failures;
-- policy violations executed.
-
-The expected value for `policy violations executed` should be zero if the architecture works correctly.
-
----
-
-## 29. Deployment Topology — Hackathon
-
-The final deployment should remain simple.
-
-Possible topology:
-
-```text
-Browser
-   |
-   v
-Frontend hosting
-   |
-   v
-FastAPI backend
-   |
-   +---------> OpenAI API
-   |
-   +---------> Razorpay Test Mode
-   |
-   v
-Managed PostgreSQL
-```
-
-Deployment provider selection should prioritize:
-
-- fast setup;
-- stable HTTPS endpoint for webhooks;
-- environment variable support;
-- logs;
-- PostgreSQL connectivity;
-- low operational overhead.
-
-Do not redesign the domain architecture around a hosting provider.
-
----
-
-## 30. Scaling Path Beyond the Hackathon
-
-The prototype architecture should have a credible evolution path without pretending those components already exist.
-
-If production traffic required it, possible future evolution could include:
-
-```text
-Webhook Gateway
-      |
-      v
-Durable Event Queue
-      |
-      v
-Independent Processing Workers
-      |
-      +--> Reconciliation Worker
-      +--> Decision Worker
-      +--> Action Worker
-      +--> Outcome Worker
-```
-
-Other future capabilities could include:
-
-- merchant multi-tenancy;
-- stronger IAM/RBAC;
-- encrypted sensitive fields;
-- dedicated secret manager;
-- queue-based retries;
-- distributed tracing;
-- dead-letter queues;
-- policy versioning;
-- model version tracking;
-- richer recovery experimentation;
-- production reconciliation workflows.
-
-These are architectural evolution notes, **not current implementation claims**.
-
----
-
-## 31. Architecture Decisions to Capture as ADRs
-
-Material decisions should be recorded in `docs/decisions/` as implementation proceeds.
-
-Recommended initial ADRs:
-
-### ADR-001 — Modular monolith instead of microservices
-
-Reason: three-day build, transactional integrity, lower operational overhead, clear internal boundaries.
-
-### ADR-002 — PostgreSQL as source of truth
-
-Reason: durable relational state, uniqueness constraints, transactional support, audit-friendly model.
-
-### ADR-003 — AI proposes, deterministic policy authorizes
-
-Reason: financial safety and explainability.
-
-### ADR-004 — Persist accepted webhook before processing
-
-Reason: preserve audit evidence and failure recoverability.
-
-### ADR-005 — Database-enforced event idempotency
-
-Reason: application-only deduplication is insufficient under concurrent delivery.
-
-### ADR-006 — No Kafka/Redis/Celery in initial prototype
-
-Reason: no demonstrated need during three-day scope.
-
-Do not create an ADR merely to increase file count; only material decisions need one.
-
----
-
-## 32. Day-by-Day Architecture Delivery
-
-### Day 1
-
-Architecture implemented:
-
-```text
-Webhook Gateway
--> Event Ledger
--> State Reconciler
--> Eligibility Gate
--> Failure Intelligence
--> Deterministic Decision/Policy
--> Audit Trail
-```
-
-No AI in the critical path.
-
-### Day 2
-
-Extend architecture with:
-
-```text
-AI Strategy Engine
--> Policy Authorization
--> Action Executor
--> Human Approval
--> Outcome Observer
--> Recovery Attribution
--> Dashboard
-```
-
-### Day 3
-
-Validate architecture through:
-
-```text
-Failure injection
--> adversarial scenarios
--> batch evaluation
--> defect fixes
--> documentation
--> stable demo deployment
-```
-
----
-
-## 33. Architecture Definition of Done
-
-The architecture can be considered successfully implemented for the hackathon when:
-
-1. valid Razorpay events enter through a verified webhook boundary;
-2. events are persisted and deduplicated;
-3. recovery cases reconcile to safe current state;
-4. stale or out-of-order events cannot regress paid state;
-5. failure context is normalized;
-6. eligibility can stop unnecessary recovery before AI use;
-7. AI recommendations are structured and bounded;
-8. deterministic policy can approve, reject, or require human approval;
-9. executor performs only authorized actions;
-10. action execution is idempotent;
-11. outcomes update cases safely;
-12. recovered revenue is attributed using documented rules;
-13. operators can inspect the decision trace;
-14. batch evaluation uses the same core domain logic;
-15. failure scenarios are tested and documented;
-16. no secrets or fake production claims are present.
-
----
-
-## 34. Final Architectural Principle
-
-ARC should never be judged by the number of components in the diagram.
-
-The architecture succeeds if the system can answer, for every recovery case:
-
-> **What happened? What is true now? Why did ARC recommend this? Was it allowed? What action actually happened? Did it recover the money?**
-
-That is the architecture ARC is designed to support.
+That evidence chain—not component count—is the architecture's measure of correctness.

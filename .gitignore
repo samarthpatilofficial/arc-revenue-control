@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Local development-agent instructions
+/AGENTS.md
+
 # Python
 __pycache__/
 *.py[cod]

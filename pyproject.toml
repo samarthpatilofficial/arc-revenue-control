@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "arc-revenue-control"
 version = "0.1.0"
-description = "Backend foundation for ARC Autonomous Revenue Control"
+description = "Policy-governed revenue recovery control plane for Razorpay merchants"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

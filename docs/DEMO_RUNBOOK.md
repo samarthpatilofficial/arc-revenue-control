@@ -1,6 +1,6 @@
-# ARC Demo Runbook
+# ARC Local Demo Runbook
 
-This runbook prepares the persisted, read-only ARC demonstration on Windows. The presentation uses one evidence-backed Razorpay Test Mode recovery plus three controlled offline scenarios. It does not require Razorpay or OpenAI network access during the walkthrough.
+This runbook prepares the persisted, read-only ARC demonstration on Windows. The walkthrough uses one evidence-backed Razorpay Test Mode recovery plus three controlled offline scenarios. It does not require Razorpay or OpenAI network access.
 
 ## 1. Open the project and activate Python
 
@@ -11,7 +11,7 @@ Set-Location "<path-to>\arc-revenue-control"
 .\.venv\Scripts\Activate.ps1
 ```
 
-Keep the private root `.env` configured for the ARC development database. Do not display its contents during recording.
+Keep the private root `.env` configured for the ARC development database. Do not display its contents during a demonstration.
 
 ## 2. Ensure PostgreSQL is running
 
@@ -52,7 +52,7 @@ Expected final line:
 DEMO STATUS: READY
 ```
 
-Do not start recording while the status is `NOT READY`; the preceding check identifies the missing persisted evidence or scenario.
+Do not begin the walkthrough while the status is `NOT READY`; the preceding check identifies the missing persisted evidence or scenario.
 
 ## 5. Start the backend
 
@@ -81,13 +81,13 @@ Open:
 http://localhost:5173
 ```
 
-## 7. Five-minute operator click path
+## 7. Recommended demonstration walkthrough
 
-### 0:00–0:30 — Overview
+### Overview
 
 Establish the payment-recovery problem, evidence-scoped metrics, and the control loop. Point out that AI appears only in `Decide`, while policy owns authorization and provider evidence owns outcome truth.
 
-### 0:30–1:45 — Genuine Test Mode recovery
+### Provider-backed Test Mode recovery
 
 Open **Recovery verified** from **Demo recovery stories**. Show:
 
@@ -98,7 +98,7 @@ Open **Recovery verified** from **Demo recovery stories**. Show:
 - Razorpay Test Mode provider evidence;
 - evidence-backed revenue attribution.
 
-### 1:45–2:40 — High-value approval
+### High-value approval
 
 Return to Overview and open **Human approval required**. Show:
 
@@ -107,7 +107,7 @@ Return to Overview and open **Human approval required**. Show:
 - pending human approval;
 - the absence of approval or execution controls in this read-only build.
 
-### 2:40–3:20 — Already-captured protection
+### Already-captured protection
 
 Open **Duplicate recovery prevented**. Show:
 
@@ -116,7 +116,7 @@ Open **Duplicate recovery prevented**. Show:
 - no strategy, recovery execution, or ARC attribution;
 - the avoided unnecessary action.
 
-### 3:20–4:00 — Hard stop
+### Hard stop
 
 Open **Automation stopped safely**. Show:
 
@@ -124,20 +124,11 @@ Open **Automation stopped safely**. Show:
 - terminal exhausted state;
 - no external recovery action.
 
-### 4:00–4:35 — Operational controls
+### Operational controls
 
 Visit **Approvals**, **Recovery Actions**, and **Decision Audit** to show human authority, governed execution records, and traceability.
 
-### 4:35–5:00 — Close on Overview
-
-Return to Overview and close with:
-
-> AI proposes.\
-> Policy authorizes.\
-> The executor acts.\
-> Provider evidence proves recovery.
-
-## Recording safety
+## Demonstration safety
 
 - `TEST MODE` is not live money.
 - `SYNTHETIC DEMO` is a controlled offline scenario, not provider evidence.
