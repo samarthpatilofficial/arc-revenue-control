@@ -343,7 +343,46 @@ Synthetic scenario seeding is disabled unless `ARC_DEMO_MODE=true`. The seeder i
 
 `python -m scripts.demo_preflight` runs inside a PostgreSQL read-only transaction. It checks the real Test Mode attribution, controlled scenarios, evidence consistency, mode isolation, and sanitized output. It does not seed, execute, or observe anything.
 
-## 17. Security properties
+## 17. Batch evaluation boundary
+
+The batch evaluator is an isolated, persistence-free evidence path:
+
+```text
+Synthetic Dataset
+      |
+      v
+ARC Domain Logic
+      |
+      v
+Bounded Strategy Provider
+      |
+      v
+Deterministic Policy
+      |
+      v
+Controlled Synthetic Outcome
+      |
+      v
+Evaluation Metrics
+```
+
+The default fixed-seed run uses transient cases and the implemented
+eligibility, diagnosis, strategy-schema, action-compatibility, policy, and
+execution-idempotency logic. Its offline strategy fixtures conform to the same
+bounded output contract as the OpenAI client but make no network request. The
+optional live-model subset remains read-only and cannot call Razorpay.
+
+Each transient case yields a bounded decision record through eligibility,
+diagnosis, strategy, policy, simulated execution, and controlled outcome.
+Only aggregate metrics and scenario breakdowns enter the tracked artifact;
+the operational database retains its own append-only audit history.
+
+Evaluation metrics and artifacts are stored separately from operational
+recovery observations and attribution. A synthetic successful outcome never
+creates a `RecoveryAttribution`, never changes Test or Live dashboard metrics,
+and is always labelled synthetic evidence.
+
+## 18. Security properties
 
 Implemented security and financial-safety properties include:
 
@@ -360,7 +399,7 @@ Implemented security and financial-safety properties include:
 - evidence-based, mode-scoped revenue metrics;
 - read-model allowlists instead of persistence-object serialization.
 
-## 18. Current limitations
+## 19. Current limitations
 
 - Provider-backed proof is Razorpay Test Mode, not live merchant money.
 - The operator console is read-only and has no approval or execution controls.
@@ -372,13 +411,13 @@ Implemented security and financial-safety properties include:
 - ARC sends no customer communications.
 - PostgreSQL is required for integration tests and operational persistence.
 
-## 19. Future production evolution — not implemented
+## 20. Future production evolution — not implemented
 
 A production deployment would require authenticated multi-tenant operator access, managed secret storage, encrypted sensitive fields, stronger observability and alerting, scheduled outcome polling, explicit retry operations, operational reconciliation tooling, and deployment-specific availability controls.
 
 At higher traffic, the durable PostgreSQL ledger and idempotent service boundaries could feed queue-backed workers. No queue, distributed worker, production IAM, or deployment topology is implemented in this repository.
 
-## 20. Architectural invariant
+## 21. Architectural invariant
 
 For every recovery case, ARC is designed to answer:
 

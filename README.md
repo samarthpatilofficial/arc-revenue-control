@@ -104,6 +104,28 @@ Creating a Payment Link is not recovery. ARC increments recovered-revenue metric
 
 The three synthetic scenarios deterministically exercise safety branches without pretending to perform external financial actions or increasing evidence-backed recovery metrics.
 
+## Batch evaluation
+
+ARC is validated through two separate evidence layers:
+
+1. **Provider-backed Razorpay Test Mode proof:** the existing ₹10.00 evidence-backed case.
+2. **100-case synthetic batch evaluation:** a fixed-seed offline control evaluation with controlled outcomes.
+
+| Synthetic batch metric | Result |
+| --- | ---: |
+| Cases evaluated | 100 |
+| Revenue at risk | ₹400,020.00 |
+| Eligible cases | 80 |
+| Automated actions authorized | 35 |
+| Human approval required | 8 |
+| Already-captured protected | 11 |
+| Synthetic evaluation recovered amount | ₹48,442.00 across 21 cases (12.1099% by amount) |
+| Policy violations / post-capture actions / duplicate executions | 0 / 0 / 0 |
+
+> **SYNTHETIC EVALUATION IS NOT PROVIDER-BACKED REVENUE.** It writes no operational attribution and does not affect Test Mode or Live Mode dashboard metrics.
+
+See [ARC Batch Evaluation](docs/EVALUATION.md) for the dataset, method, safety criteria, complete results, and limitations. Reproduce the tracked aggregate with `python -m scripts.run_batch_evaluation`; the default mode makes no OpenAI or Razorpay request.
+
 ## Where AI is used — and where it is not
 
 ARC sends the strategy engine bounded, PII-minimized case context and requires strict Structured Outputs. The model may propose exactly one action from this vocabulary:
@@ -214,18 +236,17 @@ Open `http://localhost:5173`. The operator console is read-only. For exact Postg
 
 The repository contains no database snapshot or provider credentials. On a fresh database, preflight correctly remains `NOT READY` until the required persisted Test Mode evidence and controlled scenarios exist; it never substitutes fabricated proof.
 
-## Final Buildathon validation
+## Repository validation
 
-Validation recorded for the final pre-evaluation release:
+Current local validation:
 
 | Gate | Result |
 | --- | --- |
-| Backend test suite | 367 passed |
+| Backend test suite | 385 passed |
 | Frontend test suite | 13 passed |
 | Frontend lint | Passed |
 | Frontend production build | Passed |
 | Deterministic demo preflight | `DEMO STATUS: READY` |
-| GitHub Actions | Green after user verification |
 
 No dynamic coverage percentage is claimed.
 
@@ -251,10 +272,12 @@ arc/                    Core modular-monolith domain and application services
   outcomes/             Authoritative observation and strict attribution
   read_models/          Display-safe operator projections
   demo/                 Controlled seeding and read-only semantic preflight
+  evaluation/           Isolated synthetic scenarios, runner, and metrics
 services/api/           FastAPI entry point, webhook ingress, and read API
 frontend/               Read-only React operator console
 migrations/             Alembic schema history
 tests/                  Unit, integration, and external-contract tests
+evaluation/             Aggregate synthetic evaluation artifacts
 docs/                   Product, architecture, and demo guidance
 ```
 
@@ -309,8 +332,9 @@ The seeder makes no Razorpay/OpenAI calls and creates no Payment Link. `SYNTHETI
 
 ```powershell
 python -m pytest
-python -m compileall arc services scripts
+python -m compileall arc services scripts evaluation
 python -m pip check
+python -m scripts.run_batch_evaluation
 
 Set-Location .\frontend
 npm run lint

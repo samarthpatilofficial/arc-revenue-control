@@ -1,0 +1,165 @@
+{
+  "case_count": 100,
+  "dataset_version": "arc-synthetic-recovery-v1",
+  "evaluation_name": "ARC Batch Recovery Evaluation",
+  "evaluation_version": "arc-batch-evaluation-v1",
+  "evidence_class": "SYNTHETIC_EVALUATION",
+  "failure_reasons": [],
+  "metrics": {
+    "ai_or_strategy_cases": 77,
+    "already_captured_protected": 11,
+    "automated_actions_authorized": 35,
+    "cases_evaluated": 100,
+    "deterministic_bypass_cases": 23,
+    "duplicate_actions_prevented": 2,
+    "duplicate_executions": 0,
+    "eligible_cases": 80,
+    "human_approval_required": 8,
+    "policy_violations_executed": 0,
+    "revenue_at_risk_minor": 40002000,
+    "revenue_evaluated_minor": 45265800,
+    "safe_stop_cases": 28,
+    "strategy_failures_or_fallbacks": 0,
+    "synthetic_recovered_amount_minor": 4844200,
+    "synthetic_recovered_cases": 21,
+    "synthetic_recovery_rate_by_amount": 0.121099,
+    "synthetic_recovery_rate_by_cases": 0.2625,
+    "unresolved_cases": 58,
+    "unsafe_actions_after_capture": 0,
+    "wait_cases": 30
+  },
+  "reproducibility": {
+    "clock": "2026-08-24T12:00:00+00:00",
+    "dataset_seed": 1403
+  },
+  "scenario_breakdown": {
+    "already_captured": {
+      "automated_actions_authorized": 0,
+      "cases": 10,
+      "eligible_cases": 0,
+      "human_approval_required": 0,
+      "safe_stops": 10,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "attempt_limit": {
+      "automated_actions_authorized": 0,
+      "cases": 5,
+      "eligible_cases": 5,
+      "human_approval_required": 0,
+      "safe_stops": 5,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "contact_limit": {
+      "automated_actions_authorized": 0,
+      "cases": 5,
+      "eligible_cases": 5,
+      "human_approval_required": 0,
+      "safe_stops": 5,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "customer_authentication": {
+      "automated_actions_authorized": 12,
+      "cases": 12,
+      "eligible_cases": 12,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 1794600,
+      "synthetic_recovered_cases": 8
+    },
+    "duplicate_action": {
+      "automated_actions_authorized": 2,
+      "cases": 2,
+      "eligible_cases": 2,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 305000,
+      "synthetic_recovered_cases": 2
+    },
+    "gateway_network": {
+      "automated_actions_authorized": 0,
+      "cases": 10,
+      "eligible_cases": 10,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "hard_stop": {
+      "automated_actions_authorized": 0,
+      "cases": 4,
+      "eligible_cases": 4,
+      "human_approval_required": 0,
+      "safe_stops": 4,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "high_value_approval": {
+      "automated_actions_authorized": 0,
+      "cases": 8,
+      "eligible_cases": 8,
+      "human_approval_required": 8,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "incomplete_unknown": {
+      "automated_actions_authorized": 0,
+      "cases": 3,
+      "eligible_cases": 3,
+      "human_approval_required": 0,
+      "safe_stops": 3,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "insufficient_funds": {
+      "automated_actions_authorized": 12,
+      "cases": 12,
+      "eligible_cases": 12,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 1169700,
+      "synthetic_recovered_cases": 6
+    },
+    "issuer_bank": {
+      "automated_actions_authorized": 0,
+      "cases": 10,
+      "eligible_cases": 10,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "platform_retry_active": {
+      "automated_actions_authorized": 0,
+      "cases": 10,
+      "eligible_cases": 0,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    },
+    "retry_exhausted": {
+      "automated_actions_authorized": 8,
+      "cases": 8,
+      "eligible_cases": 8,
+      "human_approval_required": 0,
+      "safe_stops": 0,
+      "synthetic_recovered_amount_minor": 1574900,
+      "synthetic_recovered_cases": 5
+    },
+    "stale_capture": {
+      "automated_actions_authorized": 1,
+      "cases": 1,
+      "eligible_cases": 1,
+      "human_approval_required": 0,
+      "safe_stops": 1,
+      "synthetic_recovered_amount_minor": 0,
+      "synthetic_recovered_cases": 0
+    }
+  },
+  "status": "PASS",
+  "strategy_mode": "OFFLINE"
+}
