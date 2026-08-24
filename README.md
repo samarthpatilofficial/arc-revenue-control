@@ -1,6 +1,6 @@
 # ARC — Autonomous Revenue Control
 
-This repository contains ARC's backend financial core and governed recovery loop: secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded strategy proposals, merchant policy authorization, crash-safe Payment Link execution, authoritative outcome observation, and strict recovered-revenue attribution.
+This repository contains ARC's backend financial core, governed recovery loop, and read-only operator console: secure webhook ingress, authoritative reconciliation, deterministic eligibility and diagnosis, bounded strategy proposals, merchant policy authorization, crash-safe Payment Link execution, authoritative outcome observation, and strict recovered-revenue attribution.
 
 ## Local setup
 
@@ -65,6 +65,32 @@ GET /api/v1/recovery-actions
 
 Responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw webhook/provider data; fingerprints and idempotency keys; credentials; and Payment Link URLs. Dashboard recovery metrics always require one provider mode and currency, and are calculated only from persisted outcome evidence. Configure explicit frontend origins with `CORS_ALLOWED_ORIGINS`, using JSON array syntax. The default is no cross-origin access, and wildcard origins are rejected.
 
+### Frontend operator console
+
+The React/Vite console is a read-only interface over the versioned API. Start the backend at `http://localhost:8000`, then open a second terminal:
+
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+The console is available at `http://localhost:5173`. `VITE_ARC_API_BASE_URL` controls its backend origin and defaults to `http://localhost:8000`; only public browser configuration belongs in `VITE_*` variables. In the backend's private root `.env`, allow the development origin explicitly:
+
+```dotenv
+CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
+```
+
+Create a production bundle with:
+
+```powershell
+cd frontend
+npm run build
+```
+
+The console distinguishes evidence-backed `TEST_MODE`, controlled `SYNTHETIC_DEMO`, and supported-but-not-implied `LIVE_MODE` data. It does not call Razorpay or OpenAI directly and provides no financial mutation controls.
+
 ### Controlled demo scenarios
 
 Synthetic demo seeding is disabled by default. To create the three idempotent offline scenarios in the configured database, enable it only for the command process:
@@ -126,7 +152,7 @@ Creating a Payment Link is not recovered revenue. A Payment Link webhook is only
 
 Every attribution is explicitly tagged `TEST` or `LIVE` from private credential metadata; metrics require an explicit provider-mode and currency scope, so test-mode revenue is never silently aggregated with live merchant revenue. No customer object, Payment Link URL, raw provider response, or credential is copied into outcome or attribution storage.
 
-There is no public approval UI, automatic polling scheduler, frontend, or production operator identity system yet. ARC does not capture or refund payments, send customer communications, support partial-payment attribution, or infer recovery attribution from generic `payment.captured` events.
+There is no approval-write UI, automatic polling scheduler, or production operator identity system yet. ARC does not capture or refund payments, send customer communications, support partial-payment attribution, or infer recovery attribution from generic `payment.captured` events.
 
 Run the tests with:
 

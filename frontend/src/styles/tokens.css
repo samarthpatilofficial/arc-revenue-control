@@ -1,0 +1,30 @@
+:root {
+  /* ARC-owned product tokens selected for a restrained payment-operations UI. */
+  --arc-navy: #0b1026;
+  --arc-navy-soft: #151b34;
+  --arc-blue: #2b4eff;
+  --arc-blue-hover: #203fd9;
+  --arc-blue-soft: #eef2ff;
+  --arc-bg: #f6f7fb;
+  --arc-surface: #ffffff;
+  --arc-surface-subtle: #fafbfd;
+  --arc-border: #e6e9f0;
+  --arc-border-strong: #d7dce6;
+  --arc-text: #172033;
+  --arc-text-secondary: #667085;
+  --arc-text-muted: #98a2b3;
+
+  --arc-success: #087a55;
+  --arc-success-soft: #e8f7f1;
+  --arc-warning: #a15c07;
+  --arc-warning-soft: #fff5df;
+  --arc-danger: #b42318;
+  --arc-danger-soft: #fff0ee;
+  --arc-info: #2754c5;
+  --arc-info-soft: #edf3ff;
+
+  --arc-radius-card: 12px;
+  --arc-radius-control: 8px;
+  --arc-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  --arc-font: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
