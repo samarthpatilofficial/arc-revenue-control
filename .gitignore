@@ -33,3 +33,6 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/coverage/
+
+# Generated public-demo deployment evidence
+var/deployment/

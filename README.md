@@ -244,8 +244,8 @@ Current local validation:
 
 | Gate | Result |
 | --- | --- |
-| Backend test suite | 385 passed |
-| Frontend test suite | 13 passed |
+| Backend test suite | 408 passed |
+| Frontend test suite | 18 passed |
 | Frontend lint | Passed |
 | Frontend production build | Passed |
 | Deterministic demo preflight | `DEMO STATUS: READY` |
@@ -282,6 +282,14 @@ tests/                  Unit, integration, and external-contract tests
 evaluation/             Aggregate synthetic evaluation artifacts
 docs/                   Product, architecture, and demo guidance
 ```
+
+## Deployment
+
+The repository is prepared for a read-only evaluator deployment using a
+Cloudflare Pages frontend, a Northflank FastAPI container, and private
+Northflank PostgreSQL. It is not publicly deployed yet. See
+[ARC Deployment](docs/DEPLOYMENT.md) for the safety boundary, exact build
+settings, and sanitized evidence-replica workflow.
 
 ## Local development details
 

@@ -3,7 +3,14 @@
 from functools import lru_cache
 from urllib.parse import urlsplit
 
-from pydantic import AnyHttpUrl, Field, PostgresDsn, SecretStr, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    PostgresDsn,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +32,10 @@ class Settings(BaseSettings):
     demo_mode: bool = Field(
         default=False,
         validation_alias="ARC_DEMO_MODE",
+    )
+    public_demo_mode: bool = Field(
+        default=False,
+        validation_alias="ARC_PUBLIC_DEMO_MODE",
     )
     cors_allowed_origins: list[str] = Field(default_factory=list)
 
@@ -60,6 +71,33 @@ class Settings(BaseSettings):
             if origin not in normalized:
                 normalized.append(origin)
         return normalized
+
+    @model_validator(mode="after")
+    def validate_public_demo_boundary(self) -> "Settings":
+        """Fail closed when public read-only mode has unsafe capabilities."""
+
+        if not self.public_demo_mode:
+            return self
+        if self.demo_mode:
+            raise ValueError(
+                "Public demo mode cannot be combined with demo mutation mode"
+            )
+        credential_names = (
+            "razorpay_key_id",
+            "razorpay_key_secret",
+            "razorpay_webhook_secret",
+            "razorpay_webhook_previous_secret",
+            "openai_api_key",
+        )
+        if any(
+            (secret := getattr(self, name)) is not None
+            and bool(secret.get_secret_value().strip())
+            for name in credential_names
+        ):
+            raise ValueError(
+                "Public demo mode must not be configured with external credentials"
+            )
+        return self
 
     @property
     def sqlalchemy_database_url(self) -> str:

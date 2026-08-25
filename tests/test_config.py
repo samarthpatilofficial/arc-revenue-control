@@ -76,6 +76,7 @@ def test_openai_key_is_optional_at_startup() -> None:
     assert settings.openai_api_key is None
     assert settings.openai_model == "gpt-5.6-luna"
     assert settings.demo_mode is False
+    assert settings.public_demo_mode is False
     assert settings.cors_allowed_origins == []
 
 
@@ -88,3 +89,57 @@ def test_cors_wildcard_is_rejected() -> None:
             cors_allowed_origins=["*"],
             _env_file=None,
         )
+
+
+def test_public_demo_mode_is_read_only_and_needs_no_provider_credentials() -> None:
+    settings = Settings(
+        database_url=(
+            "postgresql+psycopg://arc:test_only@localhost:5432/arc_test"
+        ),
+        public_demo_mode=True,
+        demo_mode=False,
+        razorpay_key_id=None,
+        razorpay_key_secret=None,
+        razorpay_webhook_secret=None,
+        razorpay_webhook_previous_secret=None,
+        openai_api_key=None,
+        _env_file=None,
+    )
+
+    assert settings.public_demo_mode is True
+    assert settings.openai_api_key is None
+    assert settings.razorpay_key_id is None
+
+
+@pytest.mark.parametrize(
+    ("override", "value"),
+    [
+        ("demo_mode", True),
+        ("razorpay_key_id", "rzp_test_not_allowed"),
+        ("razorpay_key_secret", "not-allowed"),
+        ("razorpay_webhook_secret", "not-allowed"),
+        ("razorpay_webhook_previous_secret", "not-allowed"),
+        ("openai_api_key", "not-allowed"),
+    ],
+)
+def test_public_demo_mode_rejects_unsafe_configuration(
+    override: str,
+    value: object,
+) -> None:
+    values: dict[str, object] = {
+        "database_url": (
+            "postgresql+psycopg://arc:test_only@localhost:5432/arc_test"
+        ),
+        "public_demo_mode": True,
+        "demo_mode": False,
+        "razorpay_key_id": None,
+        "razorpay_key_secret": None,
+        "razorpay_webhook_secret": None,
+        "razorpay_webhook_previous_secret": None,
+        "openai_api_key": None,
+        "_env_file": None,
+    }
+    values[override] = value
+
+    with pytest.raises(ValidationError, match="Public demo mode"):
+        Settings(**values)

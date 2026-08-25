@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from arc.config import Settings, get_settings
-from services.api.routes import api_router
+from services.api.routes import build_api_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -26,7 +26,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["GET"],
             allow_headers=["Accept", "Content-Type"],
         )
-    application.include_router(api_router)
+    application.include_router(
+        build_api_router(public_demo_mode=app_settings.public_demo_mode)
+    )
     return application
 
 
