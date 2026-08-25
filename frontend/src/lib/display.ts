@@ -3,7 +3,6 @@ const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   AUTHORITATIVE_RECONCILIATION: "Authoritative Reconciliation",
   DETERMINISTIC_PRECONDITIONS: "Deterministic Preconditions",
   DETERMINISTIC_DIAGNOSIS: "Deterministic Diagnosis",
-  AI_PROPOSAL: "AI Proposal",
   DETERMINISTIC_RULE: "Deterministic Rule",
   DETERMINISTIC_POLICY: "Deterministic Policy",
   HUMAN_APPROVAL: "Human Approval",
@@ -11,9 +10,17 @@ const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   AUTHORITATIVE_PROVIDER_EVIDENCE: "Provider Evidence",
   EVIDENCE_BACKED_ATTRIBUTION: "Evidence-backed Attribution",
   CONTROLLED_SIMULATION: "Controlled Simulation",
+  CONTROLLED_SYNTHETIC_INPUT: "Controlled Synthetic Input",
   TEST_MODE: "Test Mode",
   LIVE_MODE: "Live Mode",
   SYNTHETIC_DEMO: "Synthetic Demo",
+  SYNTHETIC_INPUT: "Synthetic Input",
+  ARC_RECOVERED: "Recovered",
+  ALREADY_CAPTURED: "Already Captured",
+  AWAITING_OUTCOME: "Awaiting Outcome",
+  OFFLINE_SIMULATION: "Offline Simulation",
+  OPENAI: "OpenAI",
+  BYPASSED: "Bypassed",
   NO_ACTION: "No action",
   WAIT: "Wait",
   REQUEST_RETRY: "Request retry",
@@ -23,6 +30,15 @@ const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   REQUIRES_APPROVAL: "Requires approval",
   WAITING_FOR_OUTCOME: "Waiting for outcome",
 };
+
+export function strategyProvenanceLabel(value: string): string {
+  return {
+    DETERMINISTIC_RULE: "Deterministic",
+    OFFLINE_SIMULATION: "Offline Simulation",
+    OPENAI: "OpenAI",
+    BYPASSED: "Bypassed — not required",
+  }[value] ?? displayEnum(value);
+}
 
 export function displayEnum(value: string | null | undefined): string {
   if (!value) {

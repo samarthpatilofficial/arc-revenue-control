@@ -1,5 +1,22 @@
 export type ProviderMode = "TEST" | "LIVE";
-export type DataOrigin = "TEST_MODE" | "LIVE_MODE" | "SYNTHETIC_DEMO";
+export type DataOrigin =
+  | "TEST_MODE"
+  | "LIVE_MODE"
+  | "SYNTHETIC_DEMO"
+  | "SYNTHETIC_INPUT";
+export type ResolutionKind =
+  | "ARC_RECOVERED"
+  | "ALREADY_CAPTURED"
+  | "REQUIRES_APPROVAL"
+  | "AWAITING_OUTCOME"
+  | "EXHAUSTED"
+  | "ESCALATED"
+  | "PENDING";
+export type StrategyProvenance =
+  | "DETERMINISTIC_RULE"
+  | "OFFLINE_SIMULATION"
+  | "OPENAI"
+  | "BYPASSED";
 export type CaseState =
   | "DETECTED"
   | "RECONCILING"
@@ -74,6 +91,7 @@ export interface CaseListItem {
   amount_minor: number | null;
   currency: string | null;
   current_state: CaseState;
+  resolution_kind: ResolutionKind;
   payment_method: string | null;
   failure_category: FailureCategory | null;
   recovery_disposition: RecoveryDisposition | null;
@@ -81,6 +99,7 @@ export interface CaseListItem {
   detected_at: string;
   resolved_at: string | null;
   strategy_action: RecoveryAction | null;
+  strategy_provenance: StrategyProvenance;
   policy_result: PolicyResult | null;
   approval_status: ApprovalStatus | null;
   recovery_execution_status: ExecutionStatus | null;
@@ -97,6 +116,7 @@ export interface CaseDetail {
     amount_minor: number | null;
     currency: string | null;
     current_state: CaseState;
+    resolution_kind: ResolutionKind;
     payment_method: string | null;
     attempt_count: number;
     contact_attempt_count: number;
@@ -114,10 +134,12 @@ export interface CaseDetail {
   strategy: {
     action: RecoveryAction;
     source: "RULE" | "AI";
+    provenance: StrategyProvenance;
+    model: string | null;
     reason_code: string;
     explanation: string;
     confidence: number | null;
-    confidence_authority: "MODEL_OBSERVABILITY_ONLY";
+    confidence_authority: "MODEL_OBSERVABILITY_ONLY" | null;
     created_at: string;
   } | null;
   policy: {
@@ -168,6 +190,8 @@ export interface TimelineItem {
   detail: string | null;
   action: RecoveryAction | null;
   authority: string | null;
+  strategy_provenance: StrategyProvenance | null;
+  strategy_model: string | null;
   result: string | null;
   amount_minor: number | null;
   currency: string | null;
@@ -181,6 +205,7 @@ export interface ApprovalQueueItem {
   amount_minor: number | null;
   currency: string | null;
   strategy_action: RecoveryAction;
+  strategy_provenance: StrategyProvenance;
   policy_reason_code: string;
   approval_status: ApprovalStatus;
   requested_at: string;
@@ -191,6 +216,7 @@ export interface ApprovalQueueItem {
 export interface RecoveryActionItem {
   case_reference: string;
   action: RecoveryAction;
+  strategy_provenance: StrategyProvenance;
   execution_status: ExecutionStatus;
   provider: string;
   external_status: string | null;
@@ -208,4 +234,42 @@ export interface CaseFilters {
   providerMode?: ProviderMode;
   limit?: number;
   offset?: number;
+}
+
+export interface HealthResponse {
+  status: "ok";
+  service: "arc-api";
+}
+
+export interface EvaluationSummary {
+  evaluation_name: string;
+  evaluation_version: string;
+  dataset_version: string;
+  evidence_class: "SYNTHETIC_EVALUATION";
+  strategy_mode: "OFFLINE";
+  status: "PASS";
+  case_count: number;
+  metrics: {
+    cases_evaluated: number;
+    revenue_evaluated_minor: number;
+    revenue_at_risk_minor: number;
+    eligible_cases: number;
+    ai_or_strategy_cases: number;
+    deterministic_bypass_cases: number;
+    automated_actions_authorized: number;
+    human_approval_required: number;
+    wait_cases: number;
+    safe_stop_cases: number;
+    already_captured_protected: number;
+    duplicate_actions_prevented: number;
+    synthetic_recovered_cases: number;
+    synthetic_recovered_amount_minor: number;
+    synthetic_recovery_rate_by_cases: number;
+    synthetic_recovery_rate_by_amount: number;
+    unresolved_cases: number;
+    policy_violations_executed: number;
+    unsafe_actions_after_capture: number;
+    duplicate_executions: number;
+    strategy_failures_or_fallbacks: number;
+  };
 }

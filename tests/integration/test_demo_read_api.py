@@ -127,6 +127,7 @@ def _assert_sensitive_fields_absent(payload: object) -> None:
         "merchant_id",
         "external_url",
         "provider_payment_id",
+        "provider_response_id",
         "assessment_fingerprint",
         "authorization_input_fingerprint",
         "request_fingerprint",
@@ -271,7 +272,7 @@ def test_timeline_is_chronological_and_labels_authority_and_synthetic_origin(
     assert stages.index("STRATEGY") < stages.index("POLICY")
     assert stages.index("POLICY") < stages.index("APPROVAL")
     assert {item["authority"] for item in timeline} >= {
-        "AI_PROPOSAL",
+        "OFFLINE_SIMULATION",
         "DETERMINISTIC_POLICY",
         "HUMAN_APPROVAL",
     }

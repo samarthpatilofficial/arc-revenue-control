@@ -78,7 +78,7 @@ export function CaseDetailPage() {
                 Detected {formatDateTime(detail.case.detected_at)}
               </span>
             </div>
-            <StatusBadge value={detail.case.current_state} />
+            <StatusBadge value={detail.case.resolution_kind} />
             <OriginBadge origin={detail.data_origin} />
           </div>
           <CaseStoryBanner detail={detail} />

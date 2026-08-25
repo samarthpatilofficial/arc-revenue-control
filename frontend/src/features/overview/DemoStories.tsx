@@ -46,10 +46,12 @@ export function DemoStories({ stories }: { stories: DemoStory[] }) {
             </div>
             <p>{story.explanation}</p>
             <div className="demo-story-amount">
-              {formatMoney(story.amountMinor, story.currency)}
+              {story.key === "alreadyCaptured"
+                ? "No recovery attributed"
+                : formatMoney(story.amountMinor, story.currency)}
             </div>
             <div className="demo-story-meta">
-              <StatusBadge value={story.caseItem.current_state} />
+              <StatusBadge value={story.caseItem.resolution_kind} />
               <OriginBadge origin={story.caseItem.data_origin} />
             </div>
             <div className="demo-story-authority">

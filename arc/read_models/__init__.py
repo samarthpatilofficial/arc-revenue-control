@@ -12,6 +12,7 @@ from arc.read_models.schemas import (
     CaseDetail,
     CaseListItem,
     DashboardSummary,
+    EvaluationSummary,
     RecoveryActionItem,
     TimelineItem,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "CaseDetail",
     "CaseListItem",
     "DashboardSummary",
+    "EvaluationSummary",
     "RecoveryActionItem",
     "TimelineItem",
     "get_case_detail",

@@ -67,6 +67,11 @@ export function OriginBadge({ origin }: { origin: DataOrigin | null }) {
       title: "Controlled synthetic scenario — not provider evidence",
       icon: <ShieldCheck size={12} aria-hidden="true" />,
     },
+    SYNTHETIC_INPUT: {
+      className: "badge-origin-synthetic",
+      title: "Synthetic input — strategy inference provenance shown separately",
+      icon: <ShieldCheck size={12} aria-hidden="true" />,
+    },
     LIVE_MODE: {
       className: "badge-origin-live",
       title: "Live provider mode",

@@ -11,7 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { authorityLabel, displayDetail, displayEnum } from "../lib/display";
+import { authorityLabel, displayDetail, displayEnum, strategyProvenanceLabel } from "../lib/display";
 import { formatDateTime, formatMoney } from "../lib/format";
 import type { TimelineItem } from "../types/api";
 import { AuthorityBadge, OriginBadge, StatusBadge } from "./Badges";
@@ -57,6 +57,9 @@ export function DecisionTimeline({ items }: { items: TimelineItem[] }) {
               <AuthorityBadge authority={item.authority} />
               {item.result ? <StatusBadge value={item.result} /> : null}
               {item.action ? <span className="badge">{displayEnum(item.action)}</span> : null}
+              {item.strategy_provenance ? (
+                <span className="badge">{strategyProvenanceLabel(item.strategy_provenance)}</span>
+              ) : null}
               {item.data_origin ? <OriginBadge origin={item.data_origin} /> : null}
             </div>
             <span className="sr-only">Authority: {authorityLabel(item.authority)}</span>

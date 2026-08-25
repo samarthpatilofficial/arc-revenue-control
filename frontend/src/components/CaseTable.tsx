@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { displayEnum, shortReference } from "../lib/display";
+import { displayEnum, shortReference, strategyProvenanceLabel } from "../lib/display";
 import { formatDateTime, formatMoney } from "../lib/format";
 import type { CaseListItem } from "../types/api";
 import { OriginBadge, StatusBadge } from "./Badges";
@@ -56,9 +56,18 @@ export function CaseTable({
                   </span>
                 ) : null}
               </td>
-              <td>{displayEnum(item.strategy_action)}</td>
+              <td>
+                <span className="table-primary">
+                  {item.strategy_action
+                    ? displayEnum(item.strategy_action)
+                    : "Bypassed — not required"}
+                </span>
+                <span className="table-secondary">
+                  {strategyProvenanceLabel(item.strategy_provenance)}
+                </span>
+              </td>
               <td><StatusBadge value={item.policy_result} /></td>
-              <td><StatusBadge value={item.current_state} /></td>
+              <td><StatusBadge value={item.resolution_kind} /></td>
               <td><OriginBadge origin={item.data_origin} /></td>
               <td className="nowrap" title={item.detected_at}>
                 {formatDateTime(item.detected_at)}

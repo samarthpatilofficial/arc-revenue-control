@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Eye,
+  FlaskConical,
   Gauge,
   Hourglass,
   Landmark,
@@ -19,23 +20,25 @@ import { EmptyState, ErrorState, MetricSkeletons, TableSkeleton } from "../../co
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { MetricCard } from "../../components/MetricCard";
 import { OriginBadge, StatusBadge } from "../../components/Badges";
-import { getCases, getDashboardSummary } from "../../lib/api";
+import { getCases, getDashboardSummary, getEvaluationSummary } from "../../lib/api";
 import { formatMoney, formatPercent } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
-import type { CaseListItem, DashboardSummary } from "../../types/api";
+import type { CaseListItem, DashboardSummary, EvaluationSummary } from "../../types/api";
 import { DemoStories } from "./DemoStories";
 import { detectDemoStories } from "./storyDetection";
 
 interface OverviewData {
   summary: DashboardSummary;
   cases: CaseListItem[];
+  evaluation: EvaluationSummary;
 }
 
 function loadOverview(signal: AbortSignal): Promise<OverviewData> {
   return Promise.all([
     getDashboardSummary(signal),
     getCases({ limit: 50 }, signal),
-  ]).then(([summary, cases]) => ({ summary, cases }));
+    getEvaluationSummary(signal),
+  ]).then(([summary, cases, evaluation]) => ({ summary, cases, evaluation }));
 }
 
 const attentionStates = new Set(["ESCALATED", "EXHAUSTED", "POLICY_VALIDATED"]);
@@ -60,12 +63,85 @@ const controlSteps: Array<{
   { label: "Detect", note: "Risk signal", icon: Gauge },
   { label: "Reconcile", note: "Payment truth", icon: SearchCheck },
   { label: "Diagnose", note: "Failure context", icon: Wrench },
-  { label: "Decide", note: "AI proposal", icon: Bot, className: "ai" },
+  { label: "Decide", note: "Strategy / AI boundary", icon: Bot, className: "ai" },
   { label: "Authorize", note: "Policy authority", icon: ShieldCheck, className: "policy" },
   { label: "Execute", note: "Governed action", icon: Landmark },
   { label: "Observe", note: "Provider evidence", icon: Eye, className: "evidence" },
   { label: "Measure", note: "Attribution", icon: CircleDollarSign },
 ];
+
+export function EvidenceClasses({
+  evaluation,
+  recoveredProof,
+}: {
+  evaluation: EvaluationSummary;
+  recoveredProof: CaseListItem | null;
+}) {
+  return (
+    <div className="evidence-class-grid">
+      <article className="evidence-class-card provider-proof">
+        <div className="evidence-class-eyebrow">
+          <CheckCircle2 size={15} aria-hidden="true" /> Provider-backed Test Mode proof
+        </div>
+        {recoveredProof ? (
+          <Link
+            className="proof-card"
+            to={`/cases/${encodeURIComponent(recoveredProof.case_reference)}`}
+          >
+            <div className="proof-content">
+              <div className="proof-label">Recovered Revenue</div>
+              <div className="proof-amount">
+                {formatMoney(
+                  recoveredProof.recovered_amount_minor,
+                  recoveredProof.currency,
+                )}
+              </div>
+              <p className="proof-description">
+                Provider-backed execution verification using a deterministic test strategy.
+              </p>
+            </div>
+            <div className="proof-evidence">
+              <strong>Recovery verified by provider evidence</strong>
+              <span>Razorpay Test Mode</span>
+              <span>Evidence-backed ARC attribution</span>
+              <div className="proof-meta">
+                <OriginBadge origin={recoveredProof.data_origin} />
+                <StatusBadge value={recoveredProof.resolution_kind} />
+              </div>
+            </div>
+          </Link>
+        ) : (
+          <p className="muted">Provider-backed recovery proof is unavailable.</p>
+        )}
+      </article>
+
+      <article className="evidence-class-card batch-proof">
+        <div className="evidence-class-eyebrow">
+          <FlaskConical size={15} aria-hidden="true" /> Synthetic batch evaluation
+        </div>
+        <div className="batch-proof-grid">
+          <span><strong>{evaluation.metrics.cases_evaluated}</strong> cases evaluated</span>
+          <span><strong>{formatMoney(evaluation.metrics.revenue_evaluated_minor, "INR")}</strong> evaluated</span>
+          <span><strong>{formatMoney(evaluation.metrics.revenue_at_risk_minor, "INR")}</strong> at risk</span>
+          <span><strong>{evaluation.metrics.automated_actions_authorized}</strong> automated authorizations</span>
+          <span><strong>{evaluation.metrics.human_approval_required}</strong> human approval gates</span>
+          <span><strong>{evaluation.metrics.wait_cases}</strong> waits</span>
+          <span><strong>{evaluation.metrics.safe_stop_cases}</strong> safe stops</span>
+          <span><strong>{evaluation.metrics.already_captured_protected}</strong> already-captured protections</span>
+          <span><strong>{evaluation.metrics.duplicate_actions_prevented}</strong> duplicate actions prevented</span>
+          <span><strong>{evaluation.metrics.synthetic_recovered_cases}</strong> synthetic recovered cases</span>
+          <span><strong>{formatMoney(evaluation.metrics.synthetic_recovered_amount_minor, "INR")}</strong> synthetic recovered amount</span>
+          <span><strong>{evaluation.metrics.policy_violations_executed}</strong> policy violations</span>
+          <span><strong>{evaluation.metrics.unsafe_actions_after_capture}</strong> unsafe post-capture actions</span>
+          <span><strong>{evaluation.metrics.duplicate_executions}</strong> duplicate executions</span>
+        </div>
+        <p className="evidence-disclaimer">
+          Synthetic evaluation results are controlled test evidence, not merchant revenue, and never enter provider-backed recovery metrics.
+        </p>
+      </article>
+    </div>
+  );
+}
 
 export function OverviewPage() {
   const resource = useApiResource(loadOverview);
@@ -84,6 +160,7 @@ export function OverviewPage() {
 
   const summary = resource.data?.summary;
   const cases = resource.data?.cases ?? [];
+  const evaluation = resource.data?.evaluation;
   const stories = detectDemoStories(cases);
   const recoveredProof = stories.find((story) => story.key === "realRecovery")?.caseItem ?? null;
 
@@ -138,46 +215,22 @@ export function OverviewPage() {
         </div>
       )}
 
-      <div className="overview-proof-section">
-        {resource.loading ? (
-          <div className="skeleton" style={{ minHeight: 164 }} />
-        ) : recoveredProof ? (
-          <Link
-            className="proof-card"
-            to={`/cases/${encodeURIComponent(recoveredProof.case_reference)}`}
-          >
-            <div className="proof-content">
-              <div className="proof-eyebrow">
-                <CheckCircle2 size={15} aria-hidden="true" /> Recovery verified
-              </div>
-              <div className="proof-label">Recovered Revenue</div>
-              <div className="proof-amount">
-                {formatMoney(
-                  recoveredProof.recovered_amount_minor,
-                  recoveredProof.currency,
-                )}
-              </div>
-              <p className="proof-description">
-                Evidence-backed Test Mode recovery through ARC-governed execution.
-              </p>
-            </div>
-            <div className="proof-evidence">
-              <strong>Provider evidence verified</strong>
-              <span>Razorpay Test Mode</span>
-              <span>Evidence-backed attribution</span>
-              <div className="proof-meta">
-                <OriginBadge origin={recoveredProof.data_origin} />
-                <StatusBadge value={recoveredProof.current_state} />
-              </div>
-            </div>
-          </Link>
-        ) : null}
-      </div>
+      <SectionCard
+        className="evidence-section"
+        title="Judge-facing evidence"
+        subtitle="Provider proof and controlled evaluation remain deliberately separate."
+      >
+        {resource.loading || !evaluation ? (
+          <div className="skeleton" style={{ minHeight: 260 }} />
+        ) : (
+          <EvidenceClasses evaluation={evaluation} recoveredProof={recoveredProof} />
+        )}
+      </SectionCard>
 
       <SectionCard
         className="demo-stories-section"
         title="Demo recovery stories"
-        subtitle="Four persisted cases demonstrate recovery, human authority, current-state protection, and deterministic stopping."
+        subtitle="Four evidence stories demonstrate recovery, human authority, current-state protection, and deterministic stopping."
       >
         {resource.loading ? (
           <div className="demo-stories-grid" aria-label="Loading demo recovery stories">

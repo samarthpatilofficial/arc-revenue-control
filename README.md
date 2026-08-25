@@ -98,18 +98,20 @@ Creating a Payment Link is not recovery. ARC increments recovered-revenue metric
 | Scenario | Origin | What it demonstrates |
 | --- | --- | --- |
 | Provider-verified recovery | `TEST_MODE` | Closed-loop recovery and evidence-backed attribution. |
-| High-value approval | `SYNTHETIC_DEMO` | AI cannot bypass deterministic policy or human authority. |
+| High-value approval | `SYNTHETIC_DEMO` | An offline strategy fixture cannot bypass deterministic policy or human authority. |
 | Already captured | `SYNTHETIC_DEMO` | Authoritative truth prevents unnecessary recovery. |
 | Hard stop | `SYNTHETIC_DEMO` | Stopping rules terminate unsafe or exhausted automation. |
+| Genuine OpenAI strategy | `SYNTHETIC_INPUT` | A real Responses API proposal is bounded by deterministic policy and stopped before execution. |
 
 The three synthetic scenarios deterministically exercise safety branches without pretending to perform external financial actions or increasing evidence-backed recovery metrics.
 
 ## Batch evaluation
 
-ARC is validated through two separate evidence layers:
+ARC presents three deliberately separate evidence layers:
 
 1. **Provider-backed Razorpay Test Mode proof:** the existing ₹10.00 evidence-backed case.
-2. **100-case synthetic batch evaluation:** a fixed-seed offline control evaluation with controlled outcomes.
+2. **Genuine OpenAI strategy proof:** one explicit Responses API inference over synthetic input, followed by deterministic non-execution policy. Synthetic input does not mean simulated model inference.
+3. **100-case synthetic batch evaluation:** a fixed-seed offline control evaluation with controlled outcomes.
 
 | Synthetic batch metric | Result |
 | --- | ---: |
@@ -299,6 +301,7 @@ The test database name must end in `_test`; destructive test setup refuses any o
 ```text
 GET /health
 GET /api/v1/dashboard/summary?provider_mode=TEST&currency=INR
+GET /api/v1/evaluation/summary
 GET /api/v1/cases
 GET /api/v1/cases/{case_reference}
 GET /api/v1/cases/{case_reference}/timeline
@@ -306,7 +309,7 @@ GET /api/v1/approvals
 GET /api/v1/recovery-actions
 ```
 
-Read responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw provider/webhook data; credentials; fingerprints; idempotency keys; and Payment Link URLs. CORS is deny-by-default and must be configured with explicit origins.
+Read responses omit customer, merchant, payment, subscription, and provider-payment identifiers; raw provider/webhook data; credentials; fingerprints; idempotency keys; and Payment Link URLs. CORS is deny-by-default and must be configured with explicit origins. For the standard Vite reviewer setup, allow both `http://localhost:5173` and `http://127.0.0.1:5173`; wildcard origins remain rejected.
 
 ### Webhook and governed recovery development
 
@@ -327,6 +330,16 @@ Remove-Item Env:ARC_DEMO_MODE
 ```
 
 The seeder makes no Razorpay/OpenAI calls and creates no Payment Link. `SYNTHETIC_DEMO` cases never increase evidence-backed recovered-revenue metrics.
+
+### Genuine OpenAI evidence case
+
+With a private `OPENAI_API_KEY` configured, an operator may explicitly run:
+
+```powershell
+python -m scripts.create_openai_evidence_case
+```
+
+This idempotent workflow uses fabricated input, the production `OpenAIResponsesClient`, the bounded strategy schema, and deterministic merchant policy. It makes no Razorpay request, creates no recovery action, and creates no recovery attribution. It is never run automatically or in CI.
 
 ### Quality commands
 

@@ -4,6 +4,8 @@ import type {
   CaseFilters,
   CaseListItem,
   DashboardSummary,
+  EvaluationSummary,
+  HealthResponse,
   RecoveryActionItem,
   TimelineItem,
 } from "../types/api";
@@ -60,6 +62,16 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 export function getDashboardSummary(signal?: AbortSignal): Promise<DashboardSummary> {
   return getJson("/api/v1/dashboard/summary?provider_mode=TEST&currency=INR", signal);
+}
+
+export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return getJson("/health", signal);
+}
+
+export function getEvaluationSummary(
+  signal?: AbortSignal,
+): Promise<EvaluationSummary> {
+  return getJson("/api/v1/evaluation/summary", signal);
 }
 
 export function getCases(

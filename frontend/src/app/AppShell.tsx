@@ -10,6 +10,8 @@ import {
   X,
 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { getHealth } from "../lib/api";
+import { useApiResource } from "../lib/useApiResource";
 
 const navigation = [
   { label: "Overview", to: "/overview", icon: LayoutDashboard },
@@ -27,10 +29,38 @@ function pageName(pathname: string): string {
   );
 }
 
+export type ApiHealthState = "checking" | "operational" | "unavailable";
+
+export function SystemStatusBadge({ state }: { state: ApiHealthState }) {
+  const label = state === "checking"
+    ? "Checking"
+    : state === "unavailable"
+      ? "API unavailable"
+      : "Operational";
+  const title = state === "checking"
+    ? "Checking ARC API health"
+    : state === "unavailable"
+      ? "ARC API could not be reached"
+      : "ARC API health check passed";
+  return (
+    <span className={`system-status ${state}`} title={title}>
+      <span className="status-dot" aria-hidden="true" />
+      <span>{label}</span>
+      <ShieldCheck className="sr-only" size={14} aria-hidden="true" />
+    </span>
+  );
+}
+
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const currentPage = pageName(location.pathname);
+  const health = useApiResource(getHealth);
+  const healthState: ApiHealthState = health.loading
+    ? "checking"
+    : health.error
+      ? "unavailable"
+      : "operational";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -95,11 +125,7 @@ export function AppShell() {
               TEST MODE
             </span>
             <span className="topbar-chip currency-chip">INR</span>
-            <span className="system-status" title="ARC read console is active">
-              <span className="status-dot" aria-hidden="true" />
-              <span>Operational</span>
-              <ShieldCheck className="sr-only" size={14} aria-hidden="true" />
-            </span>
+            <SystemStatusBadge state={healthState} />
           </div>
         </header>
         <main className="page-content">

@@ -5,7 +5,7 @@ import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { getApprovals } from "../../lib/api";
-import { displayEnum, shortReference } from "../../lib/display";
+import { displayEnum, shortReference, strategyProvenanceLabel } from "../../lib/display";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
 import type { ApprovalQueueItem } from "../../types/api";
@@ -20,6 +20,7 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
             <th scope="col">Case</th>
             <th scope="col">Amount</th>
             <th scope="col">Proposed action</th>
+            <th scope="col">Strategy source</th>
             <th scope="col">Policy reason</th>
             <th scope="col">Requested</th>
             <th scope="col">Origin</th>
@@ -41,6 +42,7 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
               </td>
               <td className="money">{formatMoney(item.amount_minor, item.currency)}</td>
               <td>{displayEnum(item.strategy_action)}</td>
+              <td>{strategyProvenanceLabel(item.strategy_provenance)}</td>
               <td>{displayEnum(item.policy_reason_code)}</td>
               <td className="nowrap" title={item.requested_at}>{formatDateTime(item.requested_at)}</td>
               <td><OriginBadge origin={item.data_origin} /></td>
@@ -72,7 +74,7 @@ export function ApprovalsPage() {
         <ShieldAlert size={17} aria-hidden="true" />
         <div>
           <strong>Human authority is preserved</strong>
-          <p>AI recommends. Policy escalates. Operators review the complete case trace before any future approval action.</p>
+          <p>Strategy proposes. Policy escalates. Human authority is preserved. Operators review the complete case trace before any approval decision.</p>
         </div>
       </div>
       <SectionCard className="table-card">

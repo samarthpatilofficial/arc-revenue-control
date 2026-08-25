@@ -8,7 +8,13 @@ from typing import TypeVar
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, selectinload
 
-from arc.demo.markers import DEMO_EVENT_SOURCE, DEMO_EVENT_TYPE
+from arc.demo.markers import (
+    DEMO_EVENT_SOURCE,
+    DEMO_EVENT_TYPE,
+    OFFLINE_DEMO_STRATEGY_MODEL,
+    OPENAI_EVIDENCE_EVENT_SOURCE,
+    OPENAI_EVIDENCE_EVENT_TYPE,
+)
 from arc.domain.enums import (
     ApprovalStatus,
     CaseState,
@@ -44,7 +50,9 @@ from arc.read_models.schemas import (
     OutcomeProjection,
     PolicyProjection,
     RecoveryActionItem,
+    ResolutionKind,
     StrategyProjection,
+    StrategyProvenance,
     TimelineItem,
 )
 
@@ -115,6 +123,12 @@ def get_case_detail(
     outcome = _latest(payment_case.outcome_observations, "observed_at")
     attribution = _latest(payment_case.attributions, "attributed_at")
     origin = _data_origin(payment_case, outcome, attribution)
+    resolution = _resolution_kind(
+        payment_case,
+        action=action,
+        attribution=attribution,
+        decision=decision,
+    )
     return CaseDetail(
         data_origin=origin,
         case=CaseProjection(
@@ -122,6 +136,7 @@ def get_case_detail(
             amount_minor=payment_case.amount,
             currency=payment_case.currency,
             current_state=payment_case.current_state,
+            resolution_kind=resolution,
             payment_method=payment_case.razorpay_payment_method,
             attempt_count=payment_case.attempt_count,
             contact_attempt_count=payment_case.contact_attempt_count,
@@ -190,6 +205,7 @@ def get_case_timeline(
         )
 
     for proposal in payment_case.strategy_proposals:
+        provenance = _strategy_provenance(proposal)
         add(
             proposal.created_at,
             TimelineItem(
@@ -199,11 +215,9 @@ def get_case_timeline(
                 timestamp=proposal.created_at,
                 detail=proposal.reason_code,
                 action=proposal.action,
-                authority=(
-                    "AI_PROPOSAL"
-                    if proposal.source is StrategySource.AI
-                    else "DETERMINISTIC_RULE"
-                ),
+                authority=provenance.value,
+                strategy_provenance=provenance,
+                strategy_model=_safe_strategy_model(proposal),
                 data_origin=origin,
             ),
         )
@@ -350,6 +364,7 @@ def list_approval_queue(
                 amount_minor=payment_case.amount,
                 currency=payment_case.currency,
                 strategy_action=proposal.action,
+                strategy_provenance=_strategy_provenance(proposal),
                 policy_reason_code=decision.reason_code,
                 approval_status=approval.status,
                 requested_at=approval.requested_at,
@@ -372,6 +387,7 @@ def list_recovery_actions(
         select(RecoveryActionRecord, PaymentCase)
         .join(PaymentCase, PaymentCase.id == RecoveryActionRecord.case_id)
         .options(selectinload(RecoveryActionRecord.outcome_observations))
+        .options(selectinload(RecoveryActionRecord.strategy_proposal))
         .order_by(RecoveryActionRecord.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -388,6 +404,9 @@ def list_recovery_actions(
             RecoveryActionItem(
                 case_reference=payment_case.case_reference,
                 action=action.action,
+                strategy_provenance=_strategy_provenance(
+                    action.strategy_proposal
+                ),
                 execution_status=action.execution_status,
                 provider=action.provider,
                 external_status=action.external_status,
@@ -409,11 +428,18 @@ def _case_list_item(payment_case: PaymentCase) -> CaseListItem:
     action = _latest(payment_case.recovery_actions, "created_at")
     outcome = _latest(payment_case.outcome_observations, "observed_at")
     attribution = _latest(payment_case.attributions, "attributed_at")
+    resolution = _resolution_kind(
+        payment_case,
+        action=action,
+        attribution=attribution,
+        decision=decision,
+    )
     return CaseListItem(
         case_reference=payment_case.case_reference,
         amount_minor=payment_case.amount,
         currency=payment_case.currency,
         current_state=payment_case.current_state,
+        resolution_kind=resolution,
         payment_method=payment_case.razorpay_payment_method,
         failure_category=payment_case.failure_category,
         recovery_disposition=payment_case.recovery_disposition,
@@ -421,6 +447,7 @@ def _case_list_item(payment_case: PaymentCase) -> CaseListItem:
         detected_at=payment_case.detected_at,
         resolved_at=payment_case.resolved_at,
         strategy_action=(proposal.action if proposal else None),
+        strategy_provenance=_strategy_provenance(proposal),
         policy_result=(decision.result if decision else None),
         approval_status=(approval.status if approval else None),
         recovery_execution_status=(
@@ -449,10 +476,16 @@ def _strategy_projection(
     return StrategyProjection(
         action=proposal.action,
         source=proposal.source,
+        provenance=_strategy_provenance(proposal),
+        model=_safe_strategy_model(proposal),
         reason_code=proposal.reason_code,
         explanation=proposal.explanation,
         confidence=proposal.confidence,
-        confidence_authority="MODEL_OBSERVABILITY_ONLY",
+        confidence_authority=(
+            "MODEL_OBSERVABILITY_ONLY"
+            if proposal.source is StrategySource.AI
+            else None
+        ),
         created_at=proposal.created_at,
     )
 
@@ -573,11 +606,21 @@ def _is_synthetic(payment_case: PaymentCase) -> bool:
     )
 
 
+def _is_synthetic_input(payment_case: PaymentCase) -> bool:
+    return any(
+        event.event_type == OPENAI_EVIDENCE_EVENT_TYPE
+        and event.source == OPENAI_EVIDENCE_EVENT_SOURCE
+        for event in payment_case.case_events
+    )
+
+
 def _data_origin(
     payment_case: PaymentCase,
     outcome: RecoveryOutcomeObservation | None,
     attribution: RecoveryAttribution | None,
 ) -> DataOrigin | None:
+    if _is_synthetic_input(payment_case):
+        return DataOrigin.SYNTHETIC_INPUT
     if _is_synthetic(payment_case):
         return DataOrigin.SYNTHETIC_DEMO
     mode = (
@@ -607,7 +650,73 @@ def _origin_for_case_id(
     )
     if synthetic:
         return DataOrigin.SYNTHETIC_DEMO
+    synthetic_input = session.scalar(
+        select(
+            exists().where(
+                CaseEvent.case_id == case_id,
+                CaseEvent.event_type == OPENAI_EVIDENCE_EVENT_TYPE,
+                CaseEvent.source == OPENAI_EVIDENCE_EVENT_SOURCE,
+            )
+        )
+    )
+    if synthetic_input:
+        return DataOrigin.SYNTHETIC_INPUT
     return _origin_from_mode(provider_mode)
+
+
+def _strategy_provenance(
+    proposal: StrategyProposal | None,
+) -> StrategyProvenance:
+    if proposal is None:
+        return StrategyProvenance.BYPASSED
+    if proposal.source is StrategySource.RULE:
+        return StrategyProvenance.DETERMINISTIC_RULE
+    if proposal.model == OFFLINE_DEMO_STRATEGY_MODEL:
+        return StrategyProvenance.OFFLINE_SIMULATION
+    return StrategyProvenance.OPENAI
+
+
+def _safe_strategy_model(proposal: StrategyProposal) -> str | None:
+    model = proposal.model
+    if proposal.source is StrategySource.RULE or model is None:
+        return None
+    normalized = model.strip()
+    if _STRATEGY_MODEL_NAME.fullmatch(normalized) is None:
+        return None
+    return normalized
+
+
+def _resolution_kind(
+    payment_case: PaymentCase,
+    *,
+    action: RecoveryActionRecord | None,
+    attribution: RecoveryAttribution | None,
+    decision: PolicyDecision | None,
+) -> ResolutionKind:
+    if attribution is not None:
+        return ResolutionKind.ARC_RECOVERED
+    already_captured = any(
+        event.event_type == "RECONCILIATION_FOUND_ALREADY_CAPTURED"
+        for event in payment_case.case_events
+    )
+    if (
+        already_captured
+        and action is None
+        and payment_case.current_state is CaseState.RECOVERED
+    ):
+        return ResolutionKind.ALREADY_CAPTURED
+    if payment_case.current_state is CaseState.EXHAUSTED:
+        return ResolutionKind.EXHAUSTED
+    if payment_case.current_state is CaseState.ESCALATED:
+        return ResolutionKind.ESCALATED
+    if (
+        decision is not None
+        and decision.result is PolicyDecisionResult.REQUIRES_APPROVAL
+    ):
+        return ResolutionKind.REQUIRES_APPROVAL
+    if payment_case.current_state is CaseState.WAITING_FOR_OUTCOME:
+        return ResolutionKind.AWAITING_OUTCOME
+    return ResolutionKind.PENDING
 
 
 def _origin_from_mode(mode: ProviderMode | None) -> DataOrigin | None:
@@ -665,6 +774,7 @@ _RECOVERY_DISPOSITION_TIMELINE_VALUES = frozenset(
     disposition.value for disposition in RecoveryDisposition
 )
 _TIMELINE_REASON_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,99}")
+_STRATEGY_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,99}")
 
 
 def _bounded_event_value(
@@ -695,6 +805,19 @@ def _timeline_from_case_event(
     event: CaseEvent,
     origin: DataOrigin | None,
 ) -> TimelineItem | None:
+    if (
+        event.event_type == OPENAI_EVIDENCE_EVENT_TYPE
+        and event.source == OPENAI_EVIDENCE_EVENT_SOURCE
+    ):
+        return TimelineItem(
+            stage="DEMO",
+            title="Synthetic input case created",
+            status="complete",
+            timestamp=event.created_at,
+            detail="No provider payment or customer interaction",
+            authority="CONTROLLED_SYNTHETIC_INPUT",
+            data_origin=DataOrigin.SYNTHETIC_INPUT,
+        )
     if event.event_type == DEMO_EVENT_TYPE and event.source == DEMO_EVENT_SOURCE:
         return TimelineItem(
             stage="DEMO",
@@ -712,6 +835,19 @@ def _timeline_from_case_event(
             status="complete",
             timestamp=event.created_at,
             authority="ARC_CONTROL_PLANE",
+            data_origin=origin,
+        )
+    if (
+        origin is DataOrigin.SYNTHETIC_INPUT
+        and event.event_type == "RECONCILIATION_CONFIRMED_FAILURE"
+    ):
+        return TimelineItem(
+            stage="RECONCILED",
+            title="Synthetic case truth established",
+            status="complete",
+            timestamp=event.created_at,
+            detail="Controlled failed-payment input",
+            authority="CONTROLLED_SYNTHETIC_INPUT",
             data_origin=origin,
         )
     reconciliation = _RECONCILIATION_TIMELINE.get(event.event_type)

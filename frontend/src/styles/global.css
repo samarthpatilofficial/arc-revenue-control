@@ -226,6 +226,16 @@ tr:focus-visible {
   box-shadow: 0 0 0 3px var(--arc-success-soft);
 }
 
+.system-status.checking .status-dot {
+  background: var(--arc-warning);
+  box-shadow: 0 0 0 3px var(--arc-warning-soft);
+}
+
+.system-status.unavailable .status-dot {
+  background: var(--arc-danger);
+  box-shadow: 0 0 0 3px var(--arc-danger-soft);
+}
+
 .menu-button {
   display: none;
   width: 36px;
@@ -357,9 +367,89 @@ tr:focus-visible {
 }
 
 .overview-proof-section,
+.evidence-section,
 .demo-stories-section,
 .control-loop-section {
   margin-bottom: 18px;
+}
+
+.evidence-section .section-card-body {
+  padding: 14px;
+}
+
+.evidence-class-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+}
+
+.evidence-class-card {
+  min-width: 0;
+  padding: 14px;
+  background: var(--arc-surface-subtle);
+  border: 1px solid var(--arc-border);
+  border-radius: 10px;
+}
+
+.evidence-class-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 11px;
+  color: var(--arc-text-secondary);
+  font-size: 10px;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.provider-proof .proof-card {
+  min-height: 232px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  box-shadow: none;
+}
+
+.provider-proof .proof-evidence {
+  min-width: 0;
+  padding: 14px 0 0;
+  border-top: 1px solid rgb(255 255 255 / 11%);
+  border-left: 0;
+}
+
+.batch-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.batch-proof-grid span {
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  color: var(--arc-text-muted);
+  font-size: 10px;
+  background: #fff;
+  border: 1px solid var(--arc-border);
+  border-radius: 7px;
+}
+
+.batch-proof-grid strong {
+  color: var(--arc-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evidence-disclaimer {
+  margin: 11px 0 0;
+  padding: 9px 10px;
+  color: var(--arc-text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+  background: var(--arc-warning-soft);
+  border-left: 3px solid var(--arc-warning);
+  border-radius: 0 6px 6px 0;
 }
 
 .demo-stories-section .section-card-body {
@@ -1261,6 +1351,10 @@ tr:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .evidence-class-grid {
+    grid-template-columns: 1fr;
+  }
+
   .timeline-panel {
     position: static;
     max-height: none;
@@ -1364,6 +1458,9 @@ tr:focus-visible {
   }
 
   .demo-stories-grid {
+    grid-template-columns: 1fr;
+  }
+  .batch-proof-grid {
     grid-template-columns: 1fr;
   }
 }

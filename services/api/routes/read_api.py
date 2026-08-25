@@ -15,11 +15,16 @@ from arc.domain.enums import (
     ProviderMode,
 )
 from arc.outcomes import calculate_recovery_metrics
+from arc.evaluation.read_model import (
+    EvaluationSummaryUnavailableError,
+    load_evaluation_summary,
+)
 from arc.read_models import (
     ApprovalQueueItem,
     CaseDetail,
     CaseListItem,
     DashboardSummary,
+    EvaluationSummary,
     RecoveryActionItem,
     TimelineItem,
     get_case_detail,
@@ -32,6 +37,22 @@ from arc.read_models import (
 router = APIRouter(prefix="/api/v1", tags=["read-api"])
 
 DbSession = Annotated[Session, Depends(get_db_session)]
+
+
+@router.get("/evaluation/summary", response_model=EvaluationSummary)
+def evaluation_summary() -> EvaluationSummary:
+    """Return the validated aggregate synthetic-evaluation artifact."""
+
+    try:
+        return load_evaluation_summary()
+    except EvaluationSummaryUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "EVALUATION_SUMMARY_UNAVAILABLE",
+                "message": "Evaluation summary is unavailable",
+            },
+        ) from None
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)

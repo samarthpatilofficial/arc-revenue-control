@@ -21,12 +21,12 @@ const STORY_COPY: Readonly<
 > = {
   realRecovery: {
     title: "Recovery verified",
-    explanation: "Provider evidence confirms Test Mode revenue recovered through ARC.",
+    explanation: "Recovery verified by Razorpay Test Mode provider evidence and ARC attribution.",
     authority: "EVIDENCE_BACKED_ATTRIBUTION",
   },
   highValueApproval: {
     title: "Human approval required",
-    explanation: "AI proposed recovery; policy retained financial authority.",
+    explanation: "An offline strategy simulation proposed recovery; policy retained financial authority.",
     authority: "DETERMINISTIC_POLICY",
   },
   alreadyCaptured: {
@@ -72,7 +72,7 @@ export function detectDemoStories(cases: CaseListItem[]): DemoStory[] {
     cases,
     (item) =>
       item.data_origin === "TEST_MODE" &&
-      item.current_state === "RECOVERED" &&
+      item.resolution_kind === "ARC_RECOVERED" &&
       item.recovered_amount_minor !== null &&
       item.recovered_amount_minor > 0,
     (item) => item.recovered_amount_minor,
@@ -89,7 +89,7 @@ export function detectDemoStories(cases: CaseListItem[]): DemoStory[] {
     cases,
     (item) =>
       item.data_origin === "SYNTHETIC_DEMO" &&
-      item.current_state === "RECOVERED" &&
+      item.resolution_kind === "ALREADY_CAPTURED" &&
       item.strategy_action === null &&
       item.recovered_amount_minor === null,
     (item) => item.amount_minor,
@@ -98,7 +98,7 @@ export function detectDemoStories(cases: CaseListItem[]): DemoStory[] {
     cases,
     (item) =>
       item.data_origin === "SYNTHETIC_DEMO" &&
-      (item.current_state === "EXHAUSTED" || item.current_state === "ESCALATED") &&
+      (item.resolution_kind === "EXHAUSTED" || item.resolution_kind === "ESCALATED") &&
       item.recovery_execution_status === null,
     (item) => item.amount_minor,
   );

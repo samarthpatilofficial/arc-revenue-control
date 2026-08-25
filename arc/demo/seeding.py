@@ -18,6 +18,7 @@ from arc.demo.markers import (
     DEMO_EVENT_TYPE,
     HARD_STOP_ATTENTION,
     HIGH_VALUE_APPROVAL,
+    OFFLINE_DEMO_STRATEGY_MODEL,
 )
 from arc.domain.enums import (
     CaseState,
@@ -44,7 +45,6 @@ _HIGH_VALUE_CASE_REFERENCE = "demo_high_value_approval_v1"
 _CAPTURED_CASE_REFERENCE = "demo_already_captured_protection_v1"
 _HARD_STOP_CASE_REFERENCE = "demo_hard_stop_attention_v1"
 
-_DEMO_MODEL = "arc-demo-offline-strategy-v1"
 _DEMO_CURRENCY = "INR"
 
 
@@ -83,7 +83,7 @@ class _OfflineStrategyClient:
 
     @property
     def model(self) -> str:
-        return _DEMO_MODEL
+        return OFFLINE_DEMO_STRATEGY_MODEL
 
     def propose(self, context: StrategyContext) -> StrategyModelResult:
         del context

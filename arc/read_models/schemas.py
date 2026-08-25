@@ -34,6 +34,28 @@ class DataOrigin(StrEnum):
     TEST_MODE = "TEST_MODE"
     LIVE_MODE = "LIVE_MODE"
     SYNTHETIC_DEMO = "SYNTHETIC_DEMO"
+    SYNTHETIC_INPUT = "SYNTHETIC_INPUT"
+
+
+class ResolutionKind(StrEnum):
+    """Evidence-derived operator presentation, separate from lifecycle state."""
+
+    ARC_RECOVERED = "ARC_RECOVERED"
+    ALREADY_CAPTURED = "ALREADY_CAPTURED"
+    REQUIRES_APPROVAL = "REQUIRES_APPROVAL"
+    AWAITING_OUTCOME = "AWAITING_OUTCOME"
+    EXHAUSTED = "EXHAUSTED"
+    ESCALATED = "ESCALATED"
+    PENDING = "PENDING"
+
+
+class StrategyProvenance(StrEnum):
+    """Display-safe strategy origin derived from persisted proposal evidence."""
+
+    DETERMINISTIC_RULE = "DETERMINISTIC_RULE"
+    OFFLINE_SIMULATION = "OFFLINE_SIMULATION"
+    OPENAI = "OPENAI"
+    BYPASSED = "BYPASSED"
 
 
 class DashboardSummary(ReadModel):
@@ -55,6 +77,7 @@ class CaseListItem(ReadModel):
     amount_minor: int | None
     currency: str | None
     current_state: CaseState
+    resolution_kind: ResolutionKind
     payment_method: str | None
     failure_category: FailureCategory | None
     recovery_disposition: RecoveryDisposition | None
@@ -62,6 +85,7 @@ class CaseListItem(ReadModel):
     detected_at: datetime
     resolved_at: datetime | None
     strategy_action: RecoveryAction | None
+    strategy_provenance: StrategyProvenance
     policy_result: PolicyDecisionResult | None
     approval_status: ApprovalStatus | None
     recovery_execution_status: RecoveryExecutionStatus | None
@@ -76,6 +100,7 @@ class CaseProjection(ReadModel):
     amount_minor: int | None
     currency: str | None
     current_state: CaseState
+    resolution_kind: ResolutionKind
     payment_method: str | None
     attempt_count: int
     contact_attempt_count: int
@@ -95,10 +120,12 @@ class DiagnosisProjection(ReadModel):
 class StrategyProjection(ReadModel):
     action: RecoveryAction
     source: StrategySource
+    provenance: StrategyProvenance
+    model: str | None
     reason_code: str
     explanation: str
     confidence: float | None
-    confidence_authority: Literal["MODEL_OBSERVABILITY_ONLY"]
+    confidence_authority: Literal["MODEL_OBSERVABILITY_ONLY"] | None
     created_at: datetime
 
 
@@ -165,6 +192,8 @@ class TimelineItem(ReadModel):
     detail: str | None = None
     action: RecoveryAction | None = None
     authority: str | None = None
+    strategy_provenance: StrategyProvenance | None = None
+    strategy_model: str | None = None
     result: str | None = None
     amount_minor: int | None = None
     currency: str | None = None
@@ -178,6 +207,7 @@ class ApprovalQueueItem(ReadModel):
     amount_minor: int | None
     currency: str | None
     strategy_action: RecoveryAction
+    strategy_provenance: StrategyProvenance
     policy_reason_code: str
     approval_status: ApprovalStatus
     requested_at: datetime
@@ -188,6 +218,7 @@ class ApprovalQueueItem(ReadModel):
 class RecoveryActionItem(ReadModel):
     case_reference: str
     action: RecoveryAction
+    strategy_provenance: StrategyProvenance
     execution_status: RecoveryExecutionStatus
     provider: str
     external_status: str | None
@@ -197,3 +228,38 @@ class RecoveryActionItem(ReadModel):
     outcome_status: RecoveryOutcomeStatus | None
     provider_mode: ProviderMode | None
     data_origin: DataOrigin | None
+
+
+class EvaluationMetricsSummary(ReadModel):
+    cases_evaluated: int
+    revenue_evaluated_minor: int
+    revenue_at_risk_minor: int
+    eligible_cases: int
+    ai_or_strategy_cases: int
+    deterministic_bypass_cases: int
+    automated_actions_authorized: int
+    human_approval_required: int
+    wait_cases: int
+    safe_stop_cases: int
+    already_captured_protected: int
+    duplicate_actions_prevented: int
+    synthetic_recovered_cases: int
+    synthetic_recovered_amount_minor: int
+    synthetic_recovery_rate_by_cases: float
+    synthetic_recovery_rate_by_amount: float
+    unresolved_cases: int
+    policy_violations_executed: int
+    unsafe_actions_after_capture: int
+    duplicate_executions: int
+    strategy_failures_or_fallbacks: int
+
+
+class EvaluationSummary(ReadModel):
+    evaluation_name: str
+    evaluation_version: str
+    dataset_version: str
+    evidence_class: Literal["SYNTHETIC_EVALUATION"]
+    strategy_mode: Literal["OFFLINE"]
+    status: Literal["PASS"]
+    case_count: int
+    metrics: EvaluationMetricsSummary

@@ -18,14 +18,14 @@ export interface CaseStoryBannerSpec {
 export function caseStoryBanner(detail: CaseDetail): CaseStoryBannerSpec | null {
   if (
     detail.data_origin === "TEST_MODE" &&
-    detail.case.current_state === "RECOVERED" &&
+    detail.case.resolution_kind === "ARC_RECOVERED" &&
     detail.attribution?.provider_mode === "TEST" &&
     detail.outcome?.provider_mode === "TEST" &&
     detail.outcome.outcome_status === "RECOVERED"
   ) {
     return {
-      title: "Recovery independently verified",
-      message: "Razorpay Test Mode provider evidence confirms captured payment and evidence-backed ARC attribution.",
+      title: "Recovery verified by provider evidence",
+      message: "Razorpay Test Mode provider evidence confirms the captured payment and evidence-backed ARC attribution. Purpose: provider-backed execution verification.",
       authority: "EVIDENCE_BACKED_ATTRIBUTION",
       tone: "success",
       icon: CheckCircle2,
@@ -44,21 +44,19 @@ export function caseStoryBanner(detail: CaseDetail): CaseStoryBannerSpec | null 
     };
   }
   if (
-    detail.case.current_state === "RECOVERED" &&
-    detail.attribution === null &&
-    detail.execution === null
+    detail.case.resolution_kind === "ALREADY_CAPTURED"
   ) {
     return {
       title: "No intervention required",
-      message: "Authoritative reconciliation found that the payment was already captured.",
+      message: "Authoritative provider state showed the payment was already captured; ARC avoided an unnecessary recovery action.",
       authority: "AUTHORITATIVE_RECONCILIATION",
       tone: "info",
       icon: SearchCheck,
     };
   }
   if (
-    (detail.case.current_state === "EXHAUSTED" ||
-      detail.case.current_state === "ESCALATED") &&
+    (detail.case.resolution_kind === "EXHAUSTED" ||
+      detail.case.resolution_kind === "ESCALATED") &&
     detail.execution === null
   ) {
     return {

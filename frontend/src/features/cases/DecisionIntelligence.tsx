@@ -24,6 +24,11 @@ function MissingCard({ title, message }: { title: string; message: string }) {
 
 export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
   const { diagnosis, strategy, policy, approval, execution, outcome, attribution } = detail;
+  const strategyLabel = strategy?.provenance === "OPENAI"
+    ? "OpenAI Strategy"
+    : strategy?.provenance === "OFFLINE_SIMULATION"
+      ? "Offline Strategy Simulation"
+      : "Deterministic Strategy";
 
   return (
     <div className="intelligence-stack">
@@ -47,31 +52,43 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           <div className="card-kicker">
             <h2>Strategy</h2>
             <span className="badge badge-info">
-              {strategy.source === "AI" ? <Bot size={12} aria-hidden="true" /> : <ShieldCheck size={12} aria-hidden="true" />}
-              {strategy.source === "AI" ? "AI Proposal" : "Deterministic Rule"}
+              {strategy.provenance === "DETERMINISTIC_RULE" ? <ShieldCheck size={12} aria-hidden="true" /> : <Bot size={12} aria-hidden="true" />}
+              {strategyLabel}
             </span>
           </div>
           <dl className="detail-list">
             <Field label="Recommended action" value={displayEnum(strategy.action)} />
             <Field label="Reason" value={displayEnum(strategy.reason_code)} />
-            <Field
-              label="Confidence"
-              value={strategy.confidence === null ? "Not available" : formatPercent(strategy.confidence)}
-            />
+            {strategy.provenance === "OPENAI" ? (
+              <>
+                <Field label="Model" value={strategy.model ?? "Unavailable"} />
+                <Field
+                  label="Confidence"
+                  value={strategy.confidence === null ? "Unavailable" : formatPercent(strategy.confidence)}
+                />
+              </>
+            ) : null}
             <Field label="Proposed" value={formatDateTime(strategy.created_at)} />
           </dl>
           <p className="explanation">{strategy.explanation}</p>
-          <div className="authority-note">
-            <LockKeyhole size={15} aria-hidden="true" />
-            <span><strong>Model observability only.</strong> Confidence does not authorize financial action.</span>
-          </div>
+          {strategy.provenance === "OPENAI" ? (
+            <div className="authority-note">
+              <LockKeyhole size={15} aria-hidden="true" />
+              <span><strong>Model confidence does not authorize financial action.</strong> Deterministic policy retains authority.</span>
+            </div>
+          ) : strategy.provenance === "OFFLINE_SIMULATION" ? (
+            <div className="authority-note offline-note">
+              <ShieldCheck size={15} aria-hidden="true" />
+              <span><strong>Controlled strategy fixture.</strong> Same bounded strategy schema. No external model call.</span>
+            </div>
+          ) : null}
         </section>
       ) : (
         <MissingCard
-          title={detail.case.current_state === "RECOVERED" ? "No recovery action required" : "Strategy"}
+          title={detail.case.resolution_kind === "ALREADY_CAPTURED" ? "No intervention required" : "Strategy"}
           message={
-            detail.case.current_state === "RECOVERED"
-              ? "Authoritative payment truth was already recovered; ARC avoided an unnecessary intervention."
+            detail.case.resolution_kind === "ALREADY_CAPTURED"
+              ? "Authoritative provider state showed the payment was already captured; ARC avoided an unnecessary recovery action."
               : "No recovery strategy was needed or recorded for this case."
           }
         />
@@ -95,7 +112,7 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           <p className="explanation">{policy.explanation}</p>
           <div className="authority-note">
             <ShieldCheck size={15} aria-hidden="true" />
-            <span><strong>AI recommendation ≠ financial authority.</strong> Merchant policy retains final authorization.</span>
+            <span><strong>Strategy proposal ≠ financial authority.</strong> Merchant policy retains final authorization.</span>
           </div>
         </section>
       ) : (
@@ -129,7 +146,7 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           <dl className="detail-list">
             <Field label="Action" value={displayEnum(execution.action)} />
             <Field label="Executor" value={displayEnum(execution.provider)} />
-            <Field label="Provider status" value={displayEnum(execution.external_status)} />
+            <Field label="Latest provider status" value={displayEnum(execution.external_status)} />
             <Field label="Execution attempts" value={String(execution.execution_attempt_count)} />
             <Field label="Executed" value={formatDateTime(execution.executed_at)} />
             <Field label="Next evaluation" value={formatDateTime(execution.next_evaluation_at)} />
@@ -169,7 +186,7 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           </dl>
           <div style={{ marginTop: 14 }}><OriginBadge origin={detail.data_origin} /></div>
         </section>
-      ) : detail.case.current_state === "RECOVERED" && execution !== null ? (
+      ) : detail.case.resolution_kind === "ARC_RECOVERED" && execution !== null ? (
         <div className="attention-banner">
           <AlertTriangle size={16} aria-hidden="true" />
           <div>

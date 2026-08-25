@@ -319,6 +319,7 @@ The implemented API surface is:
 GET  /health
 POST /webhooks/razorpay
 GET  /api/v1/dashboard/summary
+GET  /api/v1/evaluation/summary
 GET  /api/v1/cases
 GET  /api/v1/cases/{case_reference}
 GET  /api/v1/cases/{case_reference}/timeline
@@ -334,10 +335,15 @@ Historical timeline items are rendered from bounded values stored with each even
 
 ## 16. Demonstration and synthetic-data separation
 
-The repository supports two distinct demonstration evidence classes:
+The repository supports three distinct evidence classes:
 
 - a provider-backed Razorpay Test Mode recovery with authoritative observation and attribution;
 - three controlled `SYNTHETIC_DEMO` safety scenarios for approval, already-captured protection, and hard stopping.
+- one explicit `SYNTHETIC_INPUT` case whose proposal is produced by the genuine OpenAI Responses API integration and then stopped by deterministic non-execution policy.
+
+Read projections derive strategy provenance from persisted proposal evidence: `RULE` is deterministic, the known `arc-demo-offline-strategy-v1` model is an offline simulation, and other `AI` proposals originate from ARC's only external strategy adapter, OpenAI. The API may expose the bounded model name but never the provider response id, prompt, raw output, or strategy fingerprint.
+
+The OpenAI evidence script reuses `StrategyService`, its stale-context fencing, strict Structured Outputs, and the merchant authorization service. It has no execution or Razorpay client dependency. A valid external-action proposal requires human approval; safe internal proposals may be authorized but are never executed by this workflow. Provider recovery actions and attribution are verified absent before the script reports readiness.
 
 Synthetic scenario seeding is disabled unless `ARC_DEMO_MODE=true`. The seeder is idempotent and makes no Razorpay or OpenAI request. Reserved audit markers label synthetic cases, and preflight verifies that they have no provider attribution and do not affect evidence-backed recovery metrics.
 
@@ -381,6 +387,8 @@ Evaluation metrics and artifacts are stored separately from operational
 recovery observations and attribution. A synthetic successful outcome never
 creates a `RecoveryAttribution`, never changes Test or Live dashboard metrics,
 and is always labelled synthetic evidence.
+
+`GET /api/v1/evaluation/summary` validates and returns only bounded aggregate fields from the tracked `evaluation/results/latest.json` artifact. It exposes no scenario identifiers or operational database data, so the frontend has one source of truth without combining synthetic and provider-backed metrics.
 
 ## 18. Security properties
 

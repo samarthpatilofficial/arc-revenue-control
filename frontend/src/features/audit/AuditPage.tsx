@@ -5,7 +5,7 @@ import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { getCases } from "../../lib/api";
-import { displayEnum, shortReference } from "../../lib/display";
+import { displayEnum, shortReference, strategyProvenanceLabel } from "../../lib/display";
 import { formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
 
@@ -62,9 +62,16 @@ export function AuditPage() {
                     </td>
                     <td className="money">{formatMoney(item.amount_minor, item.currency)}</td>
                     <td>{displayEnum(item.failure_category)}</td>
-                    <td>{displayEnum(item.strategy_action)}</td>
+                    <td>
+                      <span className="table-primary">
+                        {item.strategy_action ? displayEnum(item.strategy_action) : "Bypassed — not required"}
+                      </span>
+                      <span className="table-secondary">
+                        {strategyProvenanceLabel(item.strategy_provenance)}
+                      </span>
+                    </td>
                     <td><StatusBadge value={item.policy_result} /></td>
-                    <td><StatusBadge value={item.current_state} /></td>
+                    <td><StatusBadge value={item.resolution_kind} /></td>
                     <td><OriginBadge origin={item.data_origin} /></td>
                     <td>
                       <Link className="button button-secondary" to={`/cases/${encodeURIComponent(item.case_reference)}`}>

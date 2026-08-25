@@ -13,6 +13,7 @@ function caseItem(overrides: Partial<CaseListItem>): CaseListItem {
     amount_minor: 1_000,
     currency: "INR",
     current_state: "DETECTED",
+    resolution_kind: "PENDING",
     payment_method: "card",
     failure_category: "CUSTOMER_AUTHENTICATION",
     recovery_disposition: "CUSTOMER_ACTION_REQUIRED",
@@ -20,6 +21,7 @@ function caseItem(overrides: Partial<CaseListItem>): CaseListItem {
     detected_at: "2026-08-23T12:00:00Z",
     resolved_at: null,
     strategy_action: null,
+    strategy_provenance: "BYPASSED",
     policy_result: null,
     approval_status: null,
     recovery_execution_status: null,
@@ -35,6 +37,8 @@ const realRecovery = caseItem({
   case_reference: "case_real_recovery",
   data_origin: "TEST_MODE",
   current_state: "RECOVERED",
+  resolution_kind: "ARC_RECOVERED",
+  strategy_provenance: "DETERMINISTIC_RULE",
   recovered_amount_minor: 1_000,
   provider_mode: "TEST",
   outcome_status: "RECOVERED",
@@ -45,7 +49,9 @@ const highValue = caseItem({
   amount_minor: 2_500_000,
   data_origin: "SYNTHETIC_DEMO",
   current_state: "POLICY_VALIDATED",
+  resolution_kind: "REQUIRES_APPROVAL",
   strategy_action: "CREATE_RECOVERY_LINK",
+  strategy_provenance: "OFFLINE_SIMULATION",
   policy_result: "REQUIRES_APPROVAL",
   approval_status: "PENDING",
 });
@@ -54,13 +60,16 @@ const alreadyCaptured = caseItem({
   amount_minor: 75_000,
   data_origin: "SYNTHETIC_DEMO",
   current_state: "RECOVERED",
+  resolution_kind: "ALREADY_CAPTURED",
 });
 const hardStop = caseItem({
   case_reference: "case_hard_stop",
   amount_minor: 180_000,
   data_origin: "SYNTHETIC_DEMO",
   current_state: "EXHAUSTED",
+  resolution_kind: "EXHAUSTED",
   strategy_action: "CREATE_RECOVERY_LINK",
+  strategy_provenance: "OFFLINE_SIMULATION",
   policy_result: "BLOCKED",
 });
 const allCases = [realRecovery, highValue, alreadyCaptured, hardStop];
@@ -73,6 +82,7 @@ function detail(overrides: Partial<CaseDetail>): CaseDetail {
       amount_minor: 1_000,
       currency: "INR",
       current_state: "DETECTED",
+      resolution_kind: "PENDING",
       payment_method: "card",
       attempt_count: 0,
       contact_attempt_count: 0,
@@ -151,7 +161,7 @@ describe("evidence-derived case banners", () => {
   it("selects each banner only from its supporting case state", () => {
     const recovered = detail({
       data_origin: "TEST_MODE",
-      case: { ...detail({}).case, current_state: "RECOVERED" },
+      case: { ...detail({}).case, current_state: "RECOVERED", resolution_kind: "ARC_RECOVERED" },
       outcome: {
         outcome_status: "RECOVERED",
         provider_mode: "TEST",
@@ -185,13 +195,13 @@ describe("evidence-derived case banners", () => {
       },
     });
     const captured = detail({
-      case: { ...detail({}).case, current_state: "RECOVERED" },
+      case: { ...detail({}).case, current_state: "RECOVERED", resolution_kind: "ALREADY_CAPTURED" },
     });
     const stopped = detail({
-      case: { ...detail({}).case, current_state: "EXHAUSTED" },
+      case: { ...detail({}).case, current_state: "EXHAUSTED", resolution_kind: "EXHAUSTED" },
     });
 
-    expect(caseStoryBanner(recovered)?.title).toBe("Recovery independently verified");
+    expect(caseStoryBanner(recovered)?.title).toBe("Recovery verified by provider evidence");
     expect(caseStoryBanner(approval)?.title).toBe("Human authority required");
     expect(caseStoryBanner(captured)?.title).toBe("No intervention required");
     expect(caseStoryBanner(stopped)?.title).toBe("Automation stopped safely");
