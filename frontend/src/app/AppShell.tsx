@@ -10,8 +10,10 @@ import {
   X,
 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { getHealth } from "../lib/api";
-import { useApiResource } from "../lib/useApiResource";
+import {
+  type ApiHealthState,
+  useBackendHealth,
+} from "../lib/backendHealth";
 
 const navigation = [
   { label: "Overview", to: "/overview", icon: LayoutDashboard },
@@ -29,25 +31,40 @@ function pageName(pathname: string): string {
   );
 }
 
-export type ApiHealthState = "checking" | "operational" | "unavailable";
-
-export function SystemStatusBadge({ state }: { state: ApiHealthState }) {
+export function SystemStatusBadge({
+  state,
+  onRetry,
+}: {
+  state: ApiHealthState;
+  onRetry?: () => void;
+}) {
   const label = state === "checking"
-    ? "Checking"
+    ? "Checking backend…"
+    : state === "waking"
+      ? "Waking demo backend…"
     : state === "unavailable"
       ? "API unavailable"
       : "Operational";
   const title = state === "checking"
     ? "Checking ARC API health"
+    : state === "waking"
+      ? "The Render Free backend is starting"
     : state === "unavailable"
       ? "ARC API could not be reached"
       : "ARC API health check passed";
   return (
-    <span className={`system-status ${state}`} title={title}>
-      <span className="status-dot" aria-hidden="true" />
-      <span>{label}</span>
-      <ShieldCheck className="sr-only" size={14} aria-hidden="true" />
-    </span>
+    <div className="health-status-control">
+      <span className={`system-status ${state}`} title={title}>
+        <span className="status-dot" aria-hidden="true" />
+        <span>{label}</span>
+        <ShieldCheck className="sr-only" size={14} aria-hidden="true" />
+      </span>
+      {state === "unavailable" && onRetry ? (
+        <button className="health-retry" type="button" onClick={onRetry}>
+          Retry
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -55,12 +72,7 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const currentPage = pageName(location.pathname);
-  const health = useApiResource(getHealth);
-  const healthState: ApiHealthState = health.loading
-    ? "checking"
-    : health.error
-      ? "unavailable"
-      : "operational";
+  const health = useBackendHealth();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -125,11 +137,11 @@ export function AppShell() {
               TEST MODE
             </span>
             <span className="topbar-chip currency-chip">INR</span>
-            <SystemStatusBadge state={healthState} />
+            <SystemStatusBadge state={health.state} onRetry={health.retry} />
           </div>
         </header>
         <main className="page-content">
-          <Outlet />
+          <Outlet context={{ healthState: health.state }} />
         </main>
       </div>
     </div>

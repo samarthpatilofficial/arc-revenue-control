@@ -3,7 +3,10 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { SystemStatusBadge } from "../app/AppShell";
 import { DecisionIntelligence } from "../features/cases/DecisionIntelligence";
-import { EvidenceClasses } from "../features/overview/OverviewPage";
+import {
+  EvidenceClasses,
+  OverviewLoadFailure,
+} from "../features/overview/OverviewPage";
 import { RecoveryActionsTable } from "../features/recovery-actions/RecoveryActionsPage";
 import type {
   CaseDetail,
@@ -176,9 +179,24 @@ describe("judge-facing evidence semantics", () => {
   });
 
   it("derives the system badge from API health state", () => {
-    expect(renderToStaticMarkup(<SystemStatusBadge state="checking" />)).toContain("Checking");
+    expect(renderToStaticMarkup(<SystemStatusBadge state="checking" />)).toContain("Checking backend…");
+    expect(renderToStaticMarkup(<SystemStatusBadge state="waking" />)).toContain("Waking demo backend…");
     expect(renderToStaticMarkup(<SystemStatusBadge state="operational" />)).toContain("Operational");
     expect(renderToStaticMarkup(<SystemStatusBadge state="unavailable" />)).toContain("API unavailable");
+  });
+
+  it("shows a truthful Overview wake-up state without fallback data", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <OverviewLoadFailure healthState="waking" onRetry={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain("Demo backend is waking up");
+    expect(markup).toContain("This can take up to a minute");
+    expect(markup).toContain("Retry");
+    expect(markup).not.toContain("Revenue at Risk");
+    expect(markup).not.toContain("Recovered Revenue");
   });
 
   it("shows provenance and latest-provider-status chronology wording", () => {

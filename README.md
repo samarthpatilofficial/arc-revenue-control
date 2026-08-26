@@ -244,8 +244,8 @@ Current local validation:
 
 | Gate | Result |
 | --- | --- |
-| Backend test suite | 408 passed |
-| Frontend test suite | 18 passed |
+| Backend test suite | 413 passed |
+| Frontend test suite | 23 passed |
 | Frontend lint | Passed |
 | Frontend production build | Passed |
 | Deterministic demo preflight | `DEMO STATUS: READY` |
@@ -286,10 +286,11 @@ docs/                   Product, architecture, and demo guidance
 ## Deployment
 
 The repository is prepared for a read-only evaluator deployment using a
-Cloudflare Pages frontend, a Northflank FastAPI container, and private
-Northflank PostgreSQL. It is not publicly deployed yet. See
+Cloudflare Pages frontend, a Render Free Docker Web Service, and Neon
+PostgreSQL 18 in Singapore with TLS. It is not publicly deployed yet. See
 [ARC Deployment](docs/DEPLOYMENT.md) for the safety boundary, exact build
-settings, and sanitized evidence-replica workflow.
+settings, bounded cold-start handling, and sanitized evidence-replica
+workflow.
 
 ## Local development details
 

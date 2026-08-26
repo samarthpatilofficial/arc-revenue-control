@@ -14,13 +14,14 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import { CaseTable } from "../../components/CaseTable";
 import { EmptyState, ErrorState, MetricSkeletons, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { MetricCard } from "../../components/MetricCard";
 import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { getCases, getDashboardSummary, getEvaluationSummary } from "../../lib/api";
+import type { ApiHealthState } from "../../lib/backendHealth";
 import { formatMoney, formatPercent } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
 import type { CaseListItem, DashboardSummary, EvaluationSummary } from "../../types/api";
@@ -143,8 +144,33 @@ export function EvidenceClasses({
   );
 }
 
+export function OverviewLoadFailure({
+  healthState,
+  onRetry,
+}: {
+  healthState: ApiHealthState;
+  onRetry: () => void;
+}) {
+  const backendIsWaking = healthState === "checking" || healthState === "waking";
+  return (
+    <SectionCard>
+      <ErrorState
+        {...(backendIsWaking
+          ? {
+              title: "Demo backend is waking up",
+              message:
+                "Demo backend is waking up. This can take up to a minute on the free evaluator deployment.",
+            }
+          : {})}
+        onRetry={onRetry}
+      />
+    </SectionCard>
+  );
+}
+
 export function OverviewPage() {
   const resource = useApiResource(loadOverview);
+  const { healthState } = useOutletContext<{ healthState: ApiHealthState }>();
 
   if (resource.error) {
     return (
@@ -153,7 +179,10 @@ export function OverviewPage() {
           title="Revenue Recovery"
           subtitle="Policy-governed recovery intelligence for failed payments."
         />
-        <SectionCard><ErrorState onRetry={resource.retry} /></SectionCard>
+        <OverviewLoadFailure
+          healthState={healthState}
+          onRetry={resource.retry}
+        />
       </>
     );
   }

@@ -14,6 +14,15 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def normalize_sqlalchemy_postgres_url(url: str) -> str:
+    """Select psycopg for driverless PostgreSQL URLs without rewriting details."""
+
+    driverless_prefix = "postgresql://"
+    if url.startswith(driverless_prefix):
+        return f"postgresql+psycopg://{url[len(driverless_prefix):]}"
+    return url
+
+
 class Settings(BaseSettings):
     """Typed runtime settings for the ARC backend."""
 
@@ -45,6 +54,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         populate_by_name=True,
+        hide_input_in_errors=True,
     )
 
     @field_validator("cors_allowed_origins")
@@ -103,7 +113,7 @@ class Settings(BaseSettings):
     def sqlalchemy_database_url(self) -> str:
         """Return the validated database URL in SQLAlchemy's string form."""
 
-        return str(self.database_url)
+        return normalize_sqlalchemy_postgres_url(str(self.database_url))
 
     @property
     def sqlalchemy_test_database_url(self) -> str | None:
@@ -111,7 +121,7 @@ class Settings(BaseSettings):
 
         if self.test_database_url is None:
             return None
-        return str(self.test_database_url)
+        return normalize_sqlalchemy_postgres_url(str(self.test_database_url))
 
 
 @lru_cache

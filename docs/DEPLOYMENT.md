@@ -2,206 +2,195 @@
 
 ## Architecture
 
-ARC's evaluator deployment keeps the existing product boundaries:
+ARC's evaluator deployment preserves the existing product boundaries:
 
 ```text
 GitHub main
   |-- Cloudflare Pages (frontend/, static React/Vite, HTTPS *.pages.dev)
-  `-- Northflank combined service (root Dockerfile, FastAPI, HTTPS *.code.run)
-        `-- Northflank PostgreSQL 18 addon (private networking only)
+  `-- Render Free Web Service (root Dockerfile, FastAPI, Singapore)
+        `-- Neon PostgreSQL 18 (Singapore, TLS required)
 ```
 
 The frontend reads the backend origin from `VITE_ARC_API_BASE_URL`. The
-backend reads its private PostgreSQL connection from `DATABASE_URL`. No proxy,
-Pages Function, Worker, queue, or additional hosting provider is involved.
+backend reads the private Neon connection string from `DATABASE_URL`. No
+proxy, Pages Function, Worker, queue, or additional runtime is required.
 
 ## Public-demo safety boundary
 
 `ARC_PUBLIC_DEMO_MODE=true` creates an evaluator-only HTTP boundary. Liveness,
 readiness, evaluation, dashboard, case, timeline, approval-list, and
 recovery-action-list reads remain available. Razorpay webhook ingress is not
-registered, and there are no HTTP approval, execution, OpenAI, or seeding
-routes.
+registered, and there are no HTTP approval, execution, OpenAI, import, or
+seeding routes.
 
 Public-demo mode fails startup when `ARC_DEMO_MODE=true` or when any OpenAI,
 Razorpay API, or Razorpay webhook credential is configured. Credentials are
-rejected rather than ignored so accidental external access is impossible.
-The hosted service therefore needs no provider credential.
+rejected rather than ignored. Do not configure any OpenAI or Razorpay
+credential on Render.
 
 This boundary is for a read-only evaluator replica. Internal domain services
 remain available to trusted operator CLIs and normal local development when
 public-demo mode is false.
 
-## Backend container
+## Backend container and Render port
 
-Northflank builds the root `Dockerfile` from the repository root. It uses
-Python 3.12 slim, installs the project from `pyproject.toml` without development
-dependencies, runs as an unprivileged user, and exposes port `8000`.
+Render builds the root `Dockerfile` from the repository root. It uses Python
+3.12 slim, installs the project without development dependencies, runs as an
+unprivileged user, and starts through `scripts/start_backend.sh`.
 
-The container starts with:
+The startup sequence is:
 
 ```text
 python -m alembic upgrade head
-python -m uvicorn services.api.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn services.api.main:app --host 0.0.0.0 --port "${PORT:-8000}"
 ```
 
-The startup script uses `set -eu` and `exec`. A failed migration stops startup;
+Render supplies `PORT`; local container runs retain the `8000` default. The
+script uses POSIX `set -eu` and `exec`. A failed migration stops startup, so
 the API is never served against an outdated schema.
 
-## Database migration
+## Neon database
 
-The Northflank service applies all committed Alembic revisions to its private
-database before Uvicorn starts. Evidence import happens only after the empty
-database is migrated.
+Create a Neon project with PostgreSQL 18 in Singapore. Use its private
+connection string only in operator shells and Render's secret environment
+settings. TLS must remain required. Neon connection strings commonly use a
+driverless `postgresql://` scheme; ARC selects SQLAlchemy's psycopg driver at
+runtime while preserving the remaining URL, including query parameters such
+as `sslmode=require&channel_binding=require`. URLs that already specify a
+driver are unchanged. The same rule applies to `TEST_DATABASE_URL` when it is
+configured.
 
-## Evidence replica
+Never paste the Neon connection string into Git, Cloudflare Pages, logs,
+issues, screenshots, or command output.
 
-The public evaluator database is a sanitized replica of the accepted persisted
+## Sanitized evidence replica
+
+The public evaluator database is a sanitized replica of accepted persisted
 Razorpay Test Mode, genuine OpenAI-on-synthetic-input, and controlled offline
 demo evidence. Deployment does not rerun provider or model actions. A copied
-Test Mode snapshot does not mean a new provider operation happened in
-Northflank.
+Test Mode snapshot does not mean a new provider operation happened on Render.
 
-The operator-only workflow is:
+The existing versioned, checksummed, gitignored bundle remains the source for
+the replica. Do not export a new bundle merely to deploy. The operator-only
+workflow is:
 
 ```text
-local accepted PostgreSQL
-  -> explicit read-only export
-  -> versioned checksummed JSON bundle (gitignored)
-  -> secure private-database forwarding
-  -> transactional import into an empty migrated database
+accepted local PostgreSQL
+  -> existing sanitized bundle
+  -> Alembic against empty Neon database
+  -> transactional CLI import
   -> read-model verification
 ```
 
-No webhook payload, raw prompt/model response, secret, Payment Link URL, real
-provider identifier, or customer identifier is included.
-
-The explicit local commands are:
+In a private operator PowerShell, set the placeholder to the Neon connection
+string without echoing it, then run:
 
 ```powershell
-python -m scripts.export_public_demo_bundle
+$env:DATABASE_URL = "<NEON_DATABASE_URL>"
+python -m alembic upgrade head
 python -m scripts.import_public_demo_bundle --bundle var/deployment/public-demo-bundle.json
 python -m scripts.verify_public_demo_database
+Remove-Item Env:DATABASE_URL
 ```
 
-The first command reads the configured accepted database in a PostgreSQL
-read-only transaction. The latter two use the `DATABASE_URL` configured in the
-private operator shell for the forwarded cloud database.
+The target must be empty except for the schema created by Alembic. The importer
+is transactional and the verifier uses the same sanitized read-model checks.
+There is no HTTP import route and no Neon CLI dependency.
+
+## Render Free Web Service configuration
+
+Create a Render **Web Service** with these settings:
+
+| Field | Value |
+| --- | --- |
+| Repository | `samarthpatilofficial/arc-revenue-control` |
+| Branch | `main` |
+| Runtime | Docker |
+| Dockerfile path | `./Dockerfile` |
+| Region | Singapore |
+| Instance type | Free |
+| Health check path | `/health` |
+
+Configure these runtime environment variables:
+
+```text
+ARC_PUBLIC_DEMO_MODE=true
+ARC_DEMO_MODE=false
+DEBUG=false
+ENVIRONMENT=public-demo
+DATABASE_URL=<PRIVATE_NEON_DATABASE_URL>
+CORS_ALLOWED_ORIGINS=[]
+```
+
+Do not set OpenAI keys, Razorpay keys, Razorpay webhook secrets, or
+`TEST_DATABASE_URL`. Render will assign the service URL in the form
+`https://<service>.onrender.com`; record the real generated value only after
+creation.
 
 ## Cloudflare Pages configuration
 
-Use these fields in a Cloudflare Pages project:
+Create a Cloudflare Pages project with these fields:
 
 | Field | Value |
 | --- | --- |
 | Repository | `samarthpatilofficial/arc-revenue-control` |
 | Production branch | `main` |
 | Root directory | `frontend` |
-| Framework preset | React / Vite |
 | Build command | `npm run build` |
 | Build output directory | `dist` |
-| Environment variable | `VITE_ARC_API_BASE_URL=https://<NORTHFLANK_BACKEND_HOST>` |
+| Environment variable | `VITE_ARC_API_BASE_URL=https://<render-service>.onrender.com` |
 
-The build is a static React Router SPA. Cloudflare Pages serves SPA fallback
-for this build because it contains no top-level `404.html`; no routing function
-or worker is required.
+The build is a static React Router SPA. No Pages Function or Worker is needed.
+Use the actual Render hostname when configuring the build variable.
 
-## Northflank configuration
+## Exact two-phase CORS rollout
 
-Create one evaluator/demo project, using Asia South / Delhi when the account
-offers it.
+1. Create Neon and privately migrate/import/verify the empty database.
+2. Create Render with `CORS_ALLOWED_ORIGINS=[]` and all other settings above.
+3. Wait for `/health` and `/ready` to succeed on the generated Render URL.
+4. Create Cloudflare Pages with that exact Render URL in
+   `VITE_ARC_API_BASE_URL`.
+5. Copy the actual production `https://<project>.pages.dev` origin.
+6. Change Render's `CORS_ALLOWED_ORIGINS` to a JSON array containing exactly
+   that one origin, for example `["https://<project>.pages.dev"]`.
+7. Redeploy Render, then verify the Pages console can read the API.
 
-Database addon:
+Never use wildcard CORS, even temporarily. Keep localhost out of the public
+service configuration.
 
-| Field | Value |
-| --- | --- |
-| Addon | PostgreSQL 18 |
-| Networking | Private only; **not publicly accessible** |
-| TLS | Preferred when compatible with the private connection configuration |
+## Render Free cold starts
 
-Combined backend service:
+The frontend expects the Free Web Service to sleep. On first load it shows
+`Checking backend…`; after an unsuccessful health request it shows
+`Waking demo backend…`. Only `GET /health` is retried, every 9 seconds, for a
+maximum of 10 attempts (about 90 seconds). A successful response changes the
+status to `Operational` and ends all health polling. Exhaustion changes it to
+`API unavailable` and exposes a manual `Retry` control.
 
-| Field | Value |
-| --- | --- |
-| Source | GitHub repository, `main` branch |
-| Build type | Dockerfile |
-| Build context | Repository root |
-| Dockerfile path | `./Dockerfile` |
-| Public HTTP port | `8000` |
-| Domain | Northflank-generated HTTPS `*.code.run` |
-| CI/CD | Deploy from `main` |
-
-Keep the service and PostgreSQL addon in the same Northflank project and bind
-`DATABASE_URL` from the addon's private connection details.
-
-## Environment variable names
-
-Northflank runtime:
-
-```text
-ARC_PUBLIC_DEMO_MODE
-ARC_DEMO_MODE
-DEBUG
-DATABASE_URL
-CORS_ALLOWED_ORIGINS
-```
-
-Required values are `ARC_PUBLIC_DEMO_MODE=true`, `ARC_DEMO_MODE=false`, and
-`DEBUG=false`. `CORS_ALLOWED_ORIGINS` must be a JSON array containing only the
-final Cloudflare Pages production origin. Do not configure localhost, a
-wildcard, OpenAI credentials, Razorpay API credentials, or webhook secrets.
-
-Cloudflare build:
-
-```text
-VITE_ARC_API_BASE_URL
-```
-
-## Secure evidence import
-
-1. Run the explicit exporter against the accepted local database.
-2. Verify the reported bundle checksum and that the file remains ignored.
-3. Use the official Northflank CLI secure forwarding mechanism to forward the
-   private PostgreSQL addon to the operator machine temporarily. Do not enable
-   the addon's public-access option.
-4. Point a private operator shell's `DATABASE_URL` at that forwarded endpoint.
-5. Run Alembic, then the bundle importer with its explicit bundle path.
-6. Run the public-demo database verifier.
-7. Stop the forwarding session.
-
-The import is a CLI operation only. There is no HTTP import or seed endpoint.
-
-## CORS rollout sequence
-
-1. Deploy Northflank first with `CORS_ALLOWED_ORIGINS=[]`.
-2. Obtain the generated `*.code.run` HTTPS backend URL.
-3. Create Cloudflare Pages with that URL as `VITE_ARC_API_BASE_URL`.
-4. Obtain the production `*.pages.dev` URL.
-5. Set Northflank `CORS_ALLOWED_ORIGINS` to the JSON array containing exactly
-   that HTTPS Pages origin.
-6. Redeploy or restart the backend, then rebuild Pages only if its backend URL
-   changed.
-
-This sequence never needs temporary wildcard CORS.
+If Overview data fails while health is checking or waking, the page says:
+`Demo backend is waking up. This can take up to a minute on the free evaluator
+deployment.` It does not substitute fake data. ARC does not use keepalive
+requests or third-party pings to prevent Render from sleeping.
 
 ## Health and readiness
 
 `GET /health` is a process liveness probe and does not query PostgreSQL.
 `GET /ready` performs a minimal database query. Database failure returns `503`
 with a sanitized error and never exposes host, database, username, driver,
-connection URL, or traceback.
+connection URL, or traceback. Render's health check must use `/health`.
 
 ## CI/CD
 
 GitHub Actions continues to run backend migrations/tests and frontend lint,
-tests, and production build on `main`. Northflank performs the authoritative
-container build and deploy. Cloudflare Pages builds the static frontend from
-the same accepted commit.
+tests, and production build on `main`. Render builds the root Dockerfile and
+Cloudflare Pages builds the static frontend from the same accepted branch.
+This repository configuration does not perform a deployment itself.
 
 ## Limitations
 
 This is an evaluator/demo deployment, not a production merchant environment.
 It is intentionally read-only, uses a sanitized evidence replica, has one
-backend process, and does not expose operational mutation controls. Production
-merchant deployment would require separate identity, authorization, secret
-management, observability, backup, and operational-security work.
+backend process, and does not expose operational mutation controls. Render
+Free cold starts can delay first access. Production merchant deployment would
+require separate identity, authorization, secret management, observability,
+backup, and operational-security work.

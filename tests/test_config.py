@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from arc.config import Settings, get_settings
+from arc.config import Settings, get_settings, normalize_sqlalchemy_postgres_url
 
 
 def test_settings_load_from_environment(monkeypatch) -> None:
@@ -78,6 +78,59 @@ def test_openai_key_is_optional_at_startup() -> None:
     assert settings.demo_mode is False
     assert settings.public_demo_mode is False
     assert settings.cors_allowed_origins == []
+
+
+def test_driverless_database_urls_select_psycopg_and_preserve_query() -> None:
+    settings = Settings(
+        database_url=(
+            "postgresql://arc:render_only@neon.example.test/arc"
+            "?sslmode=require&channel_binding=require"
+        ),
+        test_database_url=(
+            "postgresql://arc:test_only@neon.example.test/arc_test"
+            "?sslmode=require&channel_binding=require"
+        ),
+        _env_file=None,
+    )
+
+    assert settings.sqlalchemy_database_url == (
+        "postgresql+psycopg://arc:render_only@neon.example.test/arc"
+        "?sslmode=require&channel_binding=require"
+    )
+    assert settings.sqlalchemy_test_database_url == (
+        "postgresql+psycopg://arc:test_only@neon.example.test/arc_test"
+        "?sslmode=require&channel_binding=require"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://arc:test_only@localhost/arc",
+        "postgresql+asyncpg://arc:test_only@localhost/arc",
+    ],
+)
+def test_explicit_postgresql_driver_is_unchanged(url: str) -> None:
+    assert normalize_sqlalchemy_postgres_url(url) == url
+
+
+def test_configuration_errors_hide_connection_and_provider_credentials() -> None:
+    database_password = "database_password_must_not_leak"
+    provider_key = "provider_key_must_not_leak"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            database_url=(
+                f"postgresql://arc:{database_password}@localhost:5432/arc"
+            ),
+            public_demo_mode=True,
+            openai_api_key=provider_key,
+            _env_file=None,
+        )
+
+    error_text = str(exc_info.value)
+    assert database_password not in error_text
+    assert provider_key not in error_text
 
 
 def test_cors_wildcard_is_rejected() -> None:
