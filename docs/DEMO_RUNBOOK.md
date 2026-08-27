@@ -2,6 +2,8 @@
 
 This runbook prepares the persisted, read-only ARC demonstration on Windows. The walkthrough uses one evidence-backed Razorpay Test Mode recovery plus three controlled offline scenarios. It does not require Razorpay or OpenAI network access.
 
+Judges may instead use the [public read-only evaluator](https://arc-revenue-control-ui.samarthpatilofc.workers.dev). Its Render Free backend may require about a minute to wake after inactivity; the interface reports the wake-up state and retries health checks automatically.
+
 ## 1. Open the project and activate Python
 
 In Windows PowerShell:

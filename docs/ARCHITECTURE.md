@@ -64,6 +64,29 @@ External boundaries are:
 
 The demonstrated provider-backed recovery uses Razorpay Test Mode. Provider mode is derived from private credentials and retained as `TEST` or `LIVE` on outcome evidence and attribution so metrics cannot mix modes.
 
+### 3.1 Evaluator deployment (not a product requirement)
+
+The live evaluator hosts the existing product boundaries without changing the
+control loop:
+
+```text
+GitHub main
+  |-- Cloudflare Workers Static Assets
+  |     React/Vite read-only SPA
+  |     https://arc-revenue-control-ui.samarthpatilofc.workers.dev
+  |
+  `-- Render Free Docker Web Service (Singapore)
+        https://arc-revenue-control.onrender.com
+        |
+        `-- Neon PostgreSQL 18 (Singapore / TLS)
+```
+
+The public backend starts in fail-closed `ARC_PUBLIC_DEMO_MODE`, exposes only
+the health/read surface, omits provider credentials, and reads a sanitized
+evidence replica. It does not rerun Razorpay or OpenAI operations. Cloudflare,
+Render, and Neon are evaluator hosting choices, not intrinsic ARC product
+requirements.
+
 ## 4. Recovery control loop
 
 | Stage | Implemented owner | Result |

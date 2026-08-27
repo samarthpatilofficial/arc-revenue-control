@@ -9,6 +9,23 @@ ARC is an event-driven control plane that detects revenue at risk, reconciles cu
 > **AI proposes. Policy authorizes. The executor acts.**\
 > **Provider evidence proves recovery.**
 
+## Live demo
+
+**Live evaluator:** [arc-revenue-control-ui.samarthpatilofc.workers.dev](https://arc-revenue-control-ui.samarthpatilofc.workers.dev)
+
+- The public evaluator is read-only.
+- Razorpay evidence is Test Mode evidence, not live money.
+- Synthetic batch metrics are controlled evaluation results, not merchant revenue.
+- The hosted evaluator reads sanitized persisted evidence; it does not rerun provider or model operations.
+
+The API runs on a Render Free instance. After a period of inactivity, the
+first request may take about a minute while the backend wakes. ARC shows a
+`Waking demo backend…` state and retries automatically.
+
+Live evaluator verification includes API health, database readiness, all five
+evidence cases, read-only approval/recovery/audit views, and successful direct
+refresh of deep SPA routes.
+
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
@@ -256,10 +273,12 @@ No dynamic coverage percentage is claimed.
 
 | Area | Technology |
 | --- | --- |
-| Backend | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2, PostgreSQL, Alembic, httpx |
+| Frontend | React, TypeScript, Vite; Cloudflare Workers Static Assets |
+| Backend | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, httpx; Docker on Render Free Web Service, Singapore |
+| Database | Neon PostgreSQL 18, Singapore / TLS |
 | AI | OpenAI Responses API, strict Structured Outputs |
-| Frontend | React, TypeScript, Vite, React Router, Lucide, plain CSS token system |
-| Quality | pytest, Vitest, ESLint, GitHub Actions |
+| Source / CI | GitHub / GitHub Actions |
+| Quality | pytest, Vitest, ESLint |
 
 ## Repository map
 
@@ -285,12 +304,14 @@ docs/                   Product, architecture, and demo guidance
 
 ## Deployment
 
-The repository is prepared for a read-only evaluator deployment using a
-Cloudflare Pages frontend, a Render Free Docker Web Service, and Neon
-PostgreSQL 18 in Singapore with TLS. It is not publicly deployed yet. See
-[ARC Deployment](docs/DEPLOYMENT.md) for the safety boundary, exact build
-settings, bounded cold-start handling, and sanitized evidence-replica
-workflow.
+The live read-only evaluator uses Cloudflare Workers Static Assets for the
+React/Vite SPA, a Render Free Docker Web Service in Singapore for FastAPI, and
+Neon PostgreSQL 18 in Singapore with TLS. The public frontend is
+[arc-revenue-control-ui.samarthpatilofc.workers.dev](https://arc-revenue-control-ui.samarthpatilofc.workers.dev),
+and its API is [arc-revenue-control.onrender.com](https://arc-revenue-control.onrender.com).
+See [ARC Deployment](docs/DEPLOYMENT.md) for the safety boundary, reproducible
+static-asset deployment, bounded cold-start handling, and sanitized
+evidence-replica workflow.
 
 ## Local development details
 
