@@ -206,7 +206,7 @@ export function OverviewPage() {
 
       <div className="metrics-context">
         <strong>Provider-backed Test Mode metrics</strong>
-        <span>Operational recovery metrics. Synthetic evaluation is reported separately below.</span>
+        <span>Provider-backed recovery metrics. Synthetic evaluation is reported separately below.</span>
       </div>
 
       {resource.loading || !summary ? (
@@ -214,9 +214,9 @@ export function OverviewPage() {
       ) : (
         <div className="metrics-grid primary-metrics-grid">
           <MetricCard
-            label="Revenue at Risk"
+            label="Evaluated Revenue at Risk"
             value={formatMoney(summary.revenue_at_risk_minor, summary.currency)}
-            caption="Evidence-scoped evaluated revenue"
+            caption="Amount initially identified at risk"
             icon={Siren}
           />
           <MetricCard

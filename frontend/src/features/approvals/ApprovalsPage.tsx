@@ -5,6 +5,7 @@ import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { getApprovals } from "../../lib/api";
+import { approvalContextLabel } from "../../lib/caseContext";
 import { displayEnum, shortReference, strategyProvenanceLabel } from "../../lib/display";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
@@ -35,7 +36,7 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
                   to={`/cases/${encodeURIComponent(item.case_reference)}`}
                   title={item.case_reference}
                 >
-                  <span className="table-primary">High-value recovery review</span>
+                  <span className="table-primary">{approvalContextLabel(item)}</span>
                   <code className="case-reference">{shortReference(item.case_reference)}</code>
                 </Link>
               </td>
@@ -49,7 +50,7 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
               <td><StatusBadge value={item.approval_status} /></td>
               <td>
                 <Link className="button button-secondary table-action" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
-                  Review <ArrowUpRight size={13} aria-hidden="true" />
+                  View case <ArrowUpRight size={13} aria-hidden="true" />
                 </Link>
               </td>
             </tr>

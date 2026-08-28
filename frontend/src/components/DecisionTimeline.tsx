@@ -11,7 +11,13 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { authorityLabel, displayDetail, displayEnum, strategyProvenanceLabel } from "../lib/display";
+import {
+  authorityLabel,
+  displayEnum,
+  displayTimelineDetail,
+  displayTimelineTitle,
+  strategyProvenanceLabel,
+} from "../lib/display";
 import { formatDateTime, formatMoney } from "../lib/format";
 import type { TimelineItem } from "../types/api";
 import { AuthorityBadge, OriginBadge, StatusBadge } from "./Badges";
@@ -37,9 +43,7 @@ export function DecisionTimeline({ items }: { items: TimelineItem[] }) {
         const Icon = stageIcons[item.stage] ?? Gauge;
         const detail = item.amount_minor !== null && item.currency
           ? formatMoney(item.amount_minor, item.currency)
-          : item.detail
-            ? displayDetail(item.detail)
-            : null;
+          : displayTimelineDetail(item);
         return (
           <li
             className={`timeline-item ${item.status}`}
@@ -48,7 +52,7 @@ export function DecisionTimeline({ items }: { items: TimelineItem[] }) {
             <span className="timeline-marker">
               <Icon size={13} strokeWidth={2} aria-hidden="true" />
             </span>
-            <p className="timeline-title">{item.title}</p>
+            <p className="timeline-title">{displayTimelineTitle(item)}</p>
             <p className="timeline-time" title={item.timestamp}>
               {formatDateTime(item.timestamp)}
             </p>

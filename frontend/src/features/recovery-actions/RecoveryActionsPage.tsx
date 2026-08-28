@@ -34,7 +34,7 @@ export function RecoveryActionsTable({ actions }: { actions: RecoveryActionItem[
                   to={`/cases/${encodeURIComponent(item.case_reference)}`}
                   title={item.case_reference}
                 >
-                  <span className="table-primary">Provider recovery execution</span>
+                  <span className="table-primary">Provider-verified recovery</span>
                   <code className="case-reference">{shortReference(item.case_reference)}</code>
                 </Link>
               </td>

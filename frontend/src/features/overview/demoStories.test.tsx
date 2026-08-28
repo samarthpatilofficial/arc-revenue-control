@@ -184,6 +184,7 @@ describe("semantic demo stories", () => {
   it("derives distinct priority-case context from accepted evidence identities", () => {
     expect(caseContextLabel(openAIHighValue)).toBe("OpenAI payment-method update");
     expect(caseContextLabel(offlineHighValue)).toBe("High-value recovery link");
+    expect(caseContextLabel(hardStop)).toBe("Automation stopped safely");
   });
 });
 
@@ -238,7 +239,8 @@ describe("evidence-derived case banners", () => {
     expect(caseStoryBanner(detail({}))).toBeNull();
 
     const markup = renderToStaticMarkup(<CaseStoryBanner detail={recovered} />);
-    expect(markup).toContain("Razorpay Test Mode provider evidence");
+    expect(markup).toContain("Razorpay Test Mode evidence confirms the captured payment and ARC recovery attribution");
+    expect(markup).not.toContain("Purpose: provider-backed execution verification");
     expect(markup).toContain("Evidence-backed Attribution");
   });
 });

@@ -132,6 +132,8 @@ describe("judge-facing evidence semantics", () => {
       <DecisionIntelligence detail={{ ...detail("DETERMINISTIC_RULE"), case: { ...detail("DETERMINISTIC_RULE").case, current_state: "RECOVERED", resolution_kind: "ALREADY_CAPTURED" }, strategy: null }} />,
     );
     expect(table).toContain("Already Captured");
+    expect(table).toContain("Not required");
+    expect(table).not.toContain("Not available");
     expect(table).toContain("Bypassed — not required");
     expect(table).not.toContain(">Recovered<");
     expect(strategy).toContain("No intervention required");
@@ -224,6 +226,7 @@ describe("judge-facing evidence semantics", () => {
       <MemoryRouter><RecoveryActionsTable actions={[action]} /></MemoryRouter>,
     );
     expect(markup).toContain("Provider status");
+    expect(markup).toContain("Provider-verified recovery");
     expect(markup).toContain("Deterministic Test Strategy");
     expect(markup).toContain("View trace");
   });

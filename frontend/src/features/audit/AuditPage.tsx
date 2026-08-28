@@ -5,7 +5,7 @@ import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { getCases } from "../../lib/api";
-import { caseContextLabel } from "../../lib/caseContext";
+import { caseContextLabel, caseDiagnosisLabel } from "../../lib/caseContext";
 import { displayEnum, shortReference, strategyProvenanceLabel } from "../../lib/display";
 import { formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
@@ -22,7 +22,7 @@ export function AuditPage() {
       <PageHeader
         title="Decision Audit"
         subtitle="Every governed recovery case has an inspectable decision trace."
-        actions={<span className="badge"><FileClock size={13} aria-hidden="true" /> Append-oriented audit</span>}
+        actions={<span className="badge"><FileClock size={13} aria-hidden="true" /> Chronological audit</span>}
       />
       <SectionCard
         className="table-card"
@@ -63,7 +63,7 @@ export function AuditPage() {
                       </Link>
                     </td>
                     <td className="money">{formatMoney(item.amount_minor, item.currency)}</td>
-                    <td>{displayEnum(item.failure_category)}</td>
+                    <td>{caseDiagnosisLabel(item)}</td>
                     <td>
                       <span className="table-primary">
                         {item.strategy_action ? displayEnum(item.strategy_action) : "Bypassed — not required"}

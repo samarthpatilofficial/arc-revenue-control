@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { caseContextLabel } from "../lib/caseContext";
+import { caseContextLabel, caseDiagnosisLabel } from "../lib/caseContext";
 import { displayEnum, shortReference, strategyProvenanceLabel } from "../lib/display";
 import { formatMoney } from "../lib/format";
 import type { CaseListItem } from "../types/api";
@@ -46,7 +46,7 @@ export function CaseTable({
               </td>
               <td>
                 <span className="table-primary">
-                  {displayEnum(item.failure_category)}
+                  {caseDiagnosisLabel(item)}
                 </span>
                 {item.recovery_disposition ? (
                   <span className="table-secondary">

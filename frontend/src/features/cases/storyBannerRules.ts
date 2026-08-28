@@ -25,7 +25,7 @@ export function caseStoryBanner(detail: CaseDetail): CaseStoryBannerSpec | null 
   ) {
     return {
       title: "Recovery verified by provider evidence",
-      message: "Razorpay Test Mode provider evidence confirms the captured payment and evidence-backed ARC attribution. Purpose: provider-backed execution verification.",
+      message: "Razorpay Test Mode evidence confirms the captured payment and ARC recovery attribution.",
       authority: "EVIDENCE_BACKED_ATTRIBUTION",
       tone: "success",
       icon: CheckCircle2,
@@ -48,7 +48,7 @@ export function caseStoryBanner(detail: CaseDetail): CaseStoryBannerSpec | null 
   ) {
     return {
       title: "No intervention required",
-      message: "Authoritative provider state showed the payment was already captured; ARC avoided an unnecessary recovery action.",
+      message: "Controlled payment state confirmed the payment was already captured; ARC avoided an unnecessary recovery action.",
       authority: "AUTHORITATIVE_RECONCILIATION",
       tone: "info",
       icon: SearchCheck,

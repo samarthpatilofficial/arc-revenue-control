@@ -1,3 +1,5 @@
+import type { DataOrigin, StrategyProvenance, TimelineItem } from "../types/api";
+
 const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   ARC_CONTROL_PLANE: "ARC Control Plane",
   AUTHORITATIVE_RECONCILIATION: "Authoritative Reconciliation",
@@ -30,6 +32,12 @@ const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   ESCALATE_TO_HUMAN: "Escalate to human",
   REQUIRES_APPROVAL: "Requires approval",
   WAITING_FOR_OUTCOME: "Waiting for outcome",
+  STRUCTURED_REASON_INSUFFICIENT_FUNDS: "Insufficient funds",
+  STRUCTURED_REASON_INCORRECT_OTP: "Incorrect OTP",
+  STOPPING_RULE_REQUIRES_APPROVAL: "Approval required by policy",
+  AMOUNT_REQUIRES_HUMAN_APPROVAL: "High-value amount requires approval",
+  MAX_AUTOMATED_ATTEMPTS_REACHED: "Maximum automated attempts reached",
+  ARC_PAYMENT_LINK_CAPTURED: "Provider payment captured",
 };
 
 export function strategyProvenanceLabel(value: string): string {
@@ -71,6 +79,81 @@ export function displayDetail(value: string): string {
     .split(" / ")
     .map((segment) => displayEnum(segment))
     .join(" / ");
+}
+
+export function displayStrategyReason(
+  reasonCode: string,
+  provenance: StrategyProvenance,
+  dataOrigin: DataOrigin | null,
+): string {
+  if (reasonCode === "AI_PROPOSED_CREATE_RECOVERY_LINK") {
+    if (provenance === "OFFLINE_SIMULATION") {
+      return "Offline simulation proposed recovery link";
+    }
+    if (provenance === "OPENAI") {
+      return "OpenAI proposed recovery link";
+    }
+  }
+  if (
+    reasonCode === "AI_PROPOSED_PAYMENT_METHOD_UPDATE" &&
+    provenance === "OPENAI"
+  ) {
+    return "OpenAI proposed payment-method update";
+  }
+  if (
+    reasonCode === "SYNTHETIC_EXECUTION_TEST" &&
+    provenance === "DETERMINISTIC_RULE" &&
+    dataOrigin === "TEST_MODE"
+  ) {
+    return "Controlled Test Mode recovery strategy";
+  }
+  return displayEnum(reasonCode);
+}
+
+export function displayStrategyExplanation(
+  explanation: string,
+  reasonCode: string,
+  provenance: StrategyProvenance,
+  dataOrigin: DataOrigin | null,
+): string {
+  if (
+    explanation === "Synthetic bounded execution test proposal." &&
+    reasonCode === "SYNTHETIC_EXECUTION_TEST" &&
+    provenance === "DETERMINISTIC_RULE" &&
+    dataOrigin === "TEST_MODE"
+  ) {
+    return "Controlled Test Mode recovery action proposed.";
+  }
+  return explanation;
+}
+
+export function displayTimelineTitle(item: TimelineItem): string {
+  if (item.stage === "RECONCILED") {
+    return item.data_origin === "TEST_MODE"
+      ? "Razorpay Test Mode state reconciled"
+      : "Controlled payment state reconciled";
+  }
+  if (
+    item.stage === "DEMO" &&
+    item.title === "Synthetic demo scenario seeded"
+  ) {
+    return "Synthetic scenario initialized";
+  }
+  return item.title;
+}
+
+export function displayTimelineDetail(item: TimelineItem): string | null {
+  if (!item.detail) {
+    return null;
+  }
+  if (item.stage === "STRATEGY" && item.strategy_provenance) {
+    return displayStrategyReason(
+      item.detail,
+      item.strategy_provenance,
+      item.data_origin,
+    );
+  }
+  return displayDetail(item.detail);
 }
 
 export function shortReference(value: string): string {

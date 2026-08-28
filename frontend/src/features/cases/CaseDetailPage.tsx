@@ -6,6 +6,7 @@ import { DetailSkeleton, ErrorState } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { ApiError, getCaseDetail, getCaseTimeline } from "../../lib/api";
+import { detailTitle } from "../../lib/casePresentation";
 import { shortReference } from "../../lib/display";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
@@ -16,25 +17,6 @@ import { DecisionIntelligence } from "./DecisionIntelligence";
 interface CasePageData {
   detail: CaseDetail;
   timeline: TimelineItem[];
-}
-
-function detailTitle(detail: CaseDetail): string {
-  if (detail.data_origin === "TEST_MODE" && detail.case.resolution_kind === "ARC_RECOVERED") {
-    return "Provider-verified recovery";
-  }
-  if (detail.case.resolution_kind === "ALREADY_CAPTURED") {
-    return "Already captured — no action";
-  }
-  if (detail.case.resolution_kind === "REQUIRES_APPROVAL" || detail.approval?.approval_status === "PENDING") {
-    return "Human approval required";
-  }
-  if (detail.case.resolution_kind === "EXHAUSTED") {
-    return "Automation stopped safely";
-  }
-  if (detail.case.resolution_kind === "ESCALATED") {
-    return "Escalated for review";
-  }
-  return "Recovery case";
 }
 
 export function CaseDetailPage() {
