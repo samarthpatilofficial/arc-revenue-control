@@ -20,7 +20,7 @@ const STORY_COPY: Readonly<
   Record<DemoStoryKey, Omit<DemoStory, "key" | "caseItem" | "amountMinor" | "currency">>
 > = {
   realRecovery: {
-    title: "Recovery verified",
+    title: "Provider-verified recovery",
     explanation: "Recovery verified by Razorpay Test Mode provider evidence and ARC attribution.",
     authority: "EVIDENCE_BACKED_ATTRIBUTION",
   },
@@ -30,7 +30,7 @@ const STORY_COPY: Readonly<
     authority: "DETERMINISTIC_POLICY",
   },
   alreadyCaptured: {
-    title: "Duplicate recovery prevented",
+    title: "Already captured — no action",
     explanation: "Authoritative payment truth showed the revenue was already captured.",
     authority: "AUTHORITATIVE_RECONCILIATION",
   },

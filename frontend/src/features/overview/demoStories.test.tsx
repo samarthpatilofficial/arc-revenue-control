@@ -133,7 +133,7 @@ describe("semantic demo stories", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter><DemoStories stories={detectDemoStories([])} /></MemoryRouter>,
     );
-    expect(markup.match(/Demo scenario unavailable/g)).toHaveLength(4);
+    expect(markup.match(/Scenario unavailable/g)).toHaveLength(4);
     expect(markup).not.toContain("₹");
   });
 

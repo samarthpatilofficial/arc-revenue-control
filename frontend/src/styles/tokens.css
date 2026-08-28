@@ -11,8 +11,8 @@
   --arc-border: #e6e9f0;
   --arc-border-strong: #d7dce6;
   --arc-text: #172033;
-  --arc-text-secondary: #667085;
-  --arc-text-muted: #98a2b3;
+  --arc-text-secondary: #4f5d73;
+  --arc-text-muted: #667085;
 
   --arc-success: #087a55;
   --arc-success-soft: #e8f7f1;
@@ -25,6 +25,6 @@
 
   --arc-radius-card: 12px;
   --arc-radius-control: 8px;
-  --arc-shadow: 0 1px 2px rgb(16 24 40 / 4%);
-  --arc-font: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --arc-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px rgb(16 24 40 / 3%);
+  --arc-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }

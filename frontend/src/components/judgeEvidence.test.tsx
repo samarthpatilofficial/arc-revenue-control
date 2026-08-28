@@ -144,7 +144,7 @@ describe("judge-facing evidence semantics", () => {
     const deterministic = renderToStaticMarkup(<DecisionIntelligence detail={detail("DETERMINISTIC_RULE")} />);
 
     expect(offline).toContain("Offline Strategy Simulation");
-    expect(offline).toContain("Controlled strategy fixture");
+    expect(offline).toContain("Controlled offline simulation");
     expect(offline).toContain("No external model call");
     expect(offline).not.toContain("OpenAI Strategy");
     expect(offline).not.toContain("AI Proposal");
@@ -169,7 +169,7 @@ describe("judge-facing evidence semantics", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter><EvidenceClasses evaluation={evaluation} recoveredProof={recovered} /></MemoryRouter>,
     );
-    expect(markup).toContain("Provider-backed Test Mode proof");
+    expect(markup).toContain("Provider-verified Test Mode recovery");
     expect(markup).toContain("₹10.00");
     expect(markup).toContain("Synthetic batch evaluation");
     expect(markup).toContain("100");
@@ -217,8 +217,8 @@ describe("judge-facing evidence semantics", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter><RecoveryActionsTable actions={[action]} /></MemoryRouter>,
     );
-    expect(markup).toContain("Latest Provider Status");
+    expect(markup).toContain("Provider status");
     expect(markup).toContain("Deterministic Test Strategy");
-    expect(markup).toContain("Open trace");
+    expect(markup).toContain("View trace");
   });
 });

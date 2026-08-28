@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
+import { caseContextLabel } from "../lib/caseContext";
 import { displayEnum, shortReference, strategyProvenanceLabel } from "../lib/display";
-import { formatDateTime, formatMoney } from "../lib/format";
+import { formatMoney } from "../lib/format";
 import type { CaseListItem } from "../types/api";
 import { OriginBadge, StatusBadge } from "./Badges";
 
@@ -13,19 +14,18 @@ export function CaseTable({
 }) {
   return (
     <div className="table-shell">
-      <table className="data-table">
+      <table className={`data-table case-table ${compact ? "compact" : ""}`.trim()}>
         <caption className="sr-only">Revenue recovery cases</caption>
         <thead>
           <tr>
             <th scope="col">Case</th>
             <th scope="col">Amount</th>
-            {!compact ? <th scope="col">Payment method</th> : null}
             <th scope="col">Diagnosis</th>
             <th scope="col">Strategy</th>
             <th scope="col">Policy</th>
-            <th scope="col">Status</th>
+            <th scope="col">State</th>
             <th scope="col">Origin</th>
-            <th scope="col">Detected</th>
+            <th scope="col"><span className="sr-only">Open case</span></th>
           </tr>
         </thead>
         <tbody>
@@ -33,19 +33,17 @@ export function CaseTable({
             <tr key={item.case_reference}>
               <td>
                 <Link
-                  className="table-link"
+                  className="table-link case-context-link"
                   to={`/cases/${encodeURIComponent(item.case_reference)}`}
                   title={item.case_reference}
                 >
-                  {shortReference(item.case_reference)}
+                  <span className="table-primary">{caseContextLabel(item)}</span>
+                  <code className="case-reference">{shortReference(item.case_reference)}</code>
                 </Link>
               </td>
               <td className="money">
                 {formatMoney(item.amount_minor, item.currency)}
               </td>
-              {!compact ? (
-                <td>{displayEnum(item.payment_method)}</td>
-              ) : null}
               <td>
                 <span className="table-primary">
                   {displayEnum(item.failure_category)}
@@ -69,8 +67,13 @@ export function CaseTable({
               <td><StatusBadge value={item.policy_result} /></td>
               <td><StatusBadge value={item.resolution_kind} /></td>
               <td><OriginBadge origin={item.data_origin} /></td>
-              <td className="nowrap" title={item.detected_at}>
-                {formatDateTime(item.detected_at)}
+              <td>
+                <Link
+                  className="button button-secondary table-action"
+                  to={`/cases/${encodeURIComponent(item.case_reference)}`}
+                >
+                  View
+                </Link>
               </td>
             </tr>
           ))}

@@ -32,8 +32,8 @@ export function DemoStories({ stories }: { stories: DemoStory[] }) {
               </div>
               <p>{story.explanation}</p>
               <div className="demo-story-unavailable">
-                <strong>Demo scenario unavailable</strong>
-                <span>Run the deterministic demo preflight.</span>
+                <strong>Scenario unavailable</strong>
+                <span>Run the local readiness check.</span>
               </div>
             </article>
           );
@@ -61,7 +61,7 @@ export function DemoStories({ stories }: { stories: DemoStory[] }) {
               className="demo-story-link"
               to={`/cases/${encodeURIComponent(story.caseItem.case_reference)}`}
             >
-              Open case <ArrowUpRight size={13} aria-hidden="true" />
+              View case <ArrowUpRight size={13} aria-hidden="true" />
             </Link>
           </article>
         );

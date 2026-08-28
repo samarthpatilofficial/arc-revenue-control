@@ -19,10 +19,8 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
           <tr>
             <th scope="col">Case</th>
             <th scope="col">Amount</th>
-            <th scope="col">Proposed action</th>
-            <th scope="col">Strategy source</th>
-            <th scope="col">Policy reason</th>
-            <th scope="col">Requested</th>
+            <th scope="col">Proposed recovery</th>
+            <th scope="col">Policy gate</th>
             <th scope="col">Origin</th>
             <th scope="col">Status</th>
             <th scope="col"><span className="sr-only">Action</span></th>
@@ -33,23 +31,25 @@ export function ApprovalQueue({ approvals }: { approvals: ApprovalQueueItem[] })
             <tr key={item.approval_request_id}>
               <td>
                 <Link
-                  className="table-link"
+                  className="table-link case-context-link"
                   to={`/cases/${encodeURIComponent(item.case_reference)}`}
                   title={item.case_reference}
                 >
-                  {shortReference(item.case_reference)}
+                  <span className="table-primary">High-value recovery review</span>
+                  <code className="case-reference">{shortReference(item.case_reference)}</code>
                 </Link>
               </td>
               <td className="money">{formatMoney(item.amount_minor, item.currency)}</td>
-              <td>{displayEnum(item.strategy_action)}</td>
-              <td>{strategyProvenanceLabel(item.strategy_provenance)}</td>
+              <td>
+                <span className="table-primary">{displayEnum(item.strategy_action)}</span>
+                <span className="table-secondary">{strategyProvenanceLabel(item.strategy_provenance)} · {formatDateTime(item.requested_at)}</span>
+              </td>
               <td>{displayEnum(item.policy_reason_code)}</td>
-              <td className="nowrap" title={item.requested_at}>{formatDateTime(item.requested_at)}</td>
               <td><OriginBadge origin={item.data_origin} /></td>
               <td><StatusBadge value={item.approval_status} /></td>
               <td>
-                <Link className="button button-secondary" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
-                  Review Case <ArrowUpRight size={13} aria-hidden="true" />
+                <Link className="button button-secondary table-action" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
+                  Review <ArrowUpRight size={13} aria-hidden="true" />
                 </Link>
               </td>
             </tr>
@@ -67,14 +67,14 @@ export function ApprovalsPage() {
   return (
     <>
       <PageHeader
-        title="Approvals"
-        subtitle="Recovery decisions requiring human authority."
+        title="Human Authority"
+        subtitle="Policy-gated recovery decisions that require an operator review."
       />
       <div className="attention-banner">
         <ShieldAlert size={17} aria-hidden="true" />
         <div>
-          <strong>Human authority is preserved</strong>
-          <p>Strategy proposes. Policy escalates. Human authority is preserved. Operators review the complete case trace before any approval decision.</p>
+          <strong>Policy requires explicit human authority</strong>
+          <p>Strategy proposes. Deterministic policy escalates. An operator reviews the complete case trace before any financial action is authorized.</p>
         </div>
       </div>
       <SectionCard className="table-card">

@@ -18,6 +18,25 @@ interface CasePageData {
   timeline: TimelineItem[];
 }
 
+function detailTitle(detail: CaseDetail): string {
+  if (detail.data_origin === "TEST_MODE" && detail.case.resolution_kind === "ARC_RECOVERED") {
+    return "Provider-verified recovery";
+  }
+  if (detail.case.resolution_kind === "ALREADY_CAPTURED") {
+    return "Already captured — no action";
+  }
+  if (detail.case.resolution_kind === "REQUIRES_APPROVAL" || detail.approval?.approval_status === "PENDING") {
+    return "Human approval required";
+  }
+  if (detail.case.resolution_kind === "EXHAUSTED") {
+    return "Automation stopped safely";
+  }
+  if (detail.case.resolution_kind === "ESCALATED") {
+    return "Escalated for review";
+  }
+  return "Recovery case";
+}
+
 export function CaseDetailPage() {
   const { caseReference } = useParams();
   const loadDetail = useCallback(
@@ -56,8 +75,8 @@ export function CaseDetailPage() {
   return (
     <>
       <PageHeader
-        title={detail ? `Case ${shortReference(detail.case.case_reference)}` : "Case Decision Trace"}
-        subtitle="End-to-end authority, execution, provider evidence, and attribution."
+        title={detail ? detailTitle(detail) : "Case Decision Trace"}
+        subtitle={detail ? "Complete decision, authority, execution, and evidence record." : "End-to-end authority, execution, provider evidence, and attribution."}
         actions={
           <Link className="button button-secondary" to="/cases">
             <ArrowLeft size={14} aria-hidden="true" /> Back to cases
@@ -69,17 +88,21 @@ export function CaseDetailPage() {
         <DetailSkeleton />
       ) : (
         <>
-          <div className="detail-header" style={{ marginBottom: 18 }}>
-            <div>
+          <div className="detail-header">
+            <div className="detail-title-block">
+              <span className="detail-eyebrow">Case amount</span>
               <div className="detail-amount">
                 {formatMoney(detail.case.amount_minor, detail.case.currency)}
               </div>
-              <span className="muted" title={detail.case.detected_at}>
-                Detected {formatDateTime(detail.case.detected_at)}
-              </span>
+              <div className="detail-meta">
+                <code title={detail.case.case_reference}>{shortReference(detail.case.case_reference)}</code>
+                <span title={detail.case.detected_at}>Detected {formatDateTime(detail.case.detected_at)}</span>
+              </div>
             </div>
-            <StatusBadge value={detail.case.resolution_kind} />
-            <OriginBadge origin={detail.data_origin} />
+            <div className="detail-statuses">
+              <StatusBadge value={detail.case.resolution_kind} />
+              <OriginBadge origin={detail.data_origin} />
+            </div>
           </div>
           <CaseStoryBanner detail={detail} />
           <div className="detail-grid">

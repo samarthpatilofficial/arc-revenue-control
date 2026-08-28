@@ -17,15 +17,11 @@ export function RecoveryActionsTable({ actions }: { actions: RecoveryActionItem[
         <thead>
           <tr>
             <th scope="col">Case</th>
-            <th scope="col">Action</th>
-            <th scope="col">Strategy source</th>
-            <th scope="col">Executor</th>
-            <th scope="col">Execution status</th>
-            <th scope="col">Latest Provider Status</th>
-            <th scope="col">Attempts</th>
+            <th scope="col">Executed recovery</th>
+            <th scope="col">Execution</th>
+            <th scope="col">Provider status</th>
             <th scope="col">Outcome</th>
             <th scope="col">Origin</th>
-            <th scope="col">Executed</th>
             <th scope="col"><span className="sr-only">Trace</span></th>
           </tr>
         </thead>
@@ -34,31 +30,34 @@ export function RecoveryActionsTable({ actions }: { actions: RecoveryActionItem[
             <tr key={`${item.case_reference}-${item.action}`}>
               <td>
                 <Link
-                  className="table-link"
+                  className="table-link case-context-link"
                   to={`/cases/${encodeURIComponent(item.case_reference)}`}
                   title={item.case_reference}
                 >
-                  {shortReference(item.case_reference)}
+                  <span className="table-primary">Provider recovery execution</span>
+                  <code className="case-reference">{shortReference(item.case_reference)}</code>
                 </Link>
               </td>
-              <td>{displayEnum(item.action)}</td>
               <td>
-                {item.data_origin === "TEST_MODE" && item.strategy_provenance === "DETERMINISTIC_RULE"
-                  ? "Deterministic Test Strategy"
-                  : strategyProvenanceLabel(item.strategy_provenance)}
+                <span className="table-primary">{displayEnum(item.action)}</span>
+                <span className="table-secondary">
+                  {item.data_origin === "TEST_MODE" && item.strategy_provenance === "DETERMINISTIC_RULE"
+                    ? "Deterministic Test Strategy"
+                    : strategyProvenanceLabel(item.strategy_provenance)}
+                </span>
               </td>
-              <td>{displayEnum(item.provider)}</td>
-              <td><StatusBadge value={item.execution_status} /></td>
+              <td>
+                <StatusBadge value={item.execution_status} />
+                <span className="table-secondary" title={item.executed_at ?? undefined}>
+                  {displayEnum(item.provider)} · attempt {item.execution_attempt_count} · {formatDateTime(item.executed_at)}
+                </span>
+              </td>
               <td>{displayEnum(item.external_status)}</td>
-              <td className="money">{item.execution_attempt_count}</td>
               <td><StatusBadge value={item.outcome_status} /></td>
               <td><OriginBadge origin={item.data_origin} /></td>
-              <td className="nowrap" title={item.executed_at ?? undefined}>
-                {formatDateTime(item.executed_at)}
-              </td>
               <td>
-                <Link className="button button-secondary" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
-                  Open trace
+                <Link className="button button-secondary table-action" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
+                  View trace
                 </Link>
               </td>
             </tr>

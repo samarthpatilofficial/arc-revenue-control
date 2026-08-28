@@ -5,6 +5,7 @@ import { OriginBadge, StatusBadge } from "../../components/Badges";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/Feedback";
 import { PageHeader, SectionCard } from "../../components/Layout";
 import { getCases } from "../../lib/api";
+import { caseContextLabel } from "../../lib/caseContext";
 import { displayEnum, shortReference, strategyProvenanceLabel } from "../../lib/display";
 import { formatMoney } from "../../lib/format";
 import { useApiResource } from "../../lib/useApiResource";
@@ -53,11 +54,12 @@ export function AuditPage() {
                   <tr key={item.case_reference}>
                     <td>
                       <Link
-                        className="table-link"
+                        className="table-link case-context-link"
                         to={`/cases/${encodeURIComponent(item.case_reference)}`}
                         title={item.case_reference}
                       >
-                        {shortReference(item.case_reference)}
+                        <span className="table-primary">{caseContextLabel(item)}</span>
+                        <code className="case-reference">{shortReference(item.case_reference)}</code>
                       </Link>
                     </td>
                     <td className="money">{formatMoney(item.amount_minor, item.currency)}</td>
@@ -74,8 +76,8 @@ export function AuditPage() {
                     <td><StatusBadge value={item.resolution_kind} /></td>
                     <td><OriginBadge origin={item.data_origin} /></td>
                     <td>
-                      <Link className="button button-secondary" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
-                        Open Trace <ArrowUpRight size={13} aria-hidden="true" />
+                      <Link className="button button-secondary table-action" to={`/cases/${encodeURIComponent(item.case_reference)}`}>
+                        View trace <ArrowUpRight size={13} aria-hidden="true" />
                       </Link>
                     </td>
                   </tr>

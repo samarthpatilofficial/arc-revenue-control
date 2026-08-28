@@ -109,9 +109,9 @@ export function AppShell() {
         </nav>
         <div className="sidebar-footer">
           <strong>ARC</strong>
-          Policy-Governed Recovery
+          Policy-Governed Revenue Recovery
           <br />
-          Built for Razorpay AI Buildathon
+          Razorpay AI Buildathon · Track 03
         </div>
       </aside>
 

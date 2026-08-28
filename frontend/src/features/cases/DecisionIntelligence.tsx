@@ -79,7 +79,7 @@ export function DecisionIntelligence({ detail }: { detail: CaseDetail }) {
           ) : strategy.provenance === "OFFLINE_SIMULATION" ? (
             <div className="authority-note offline-note">
               <ShieldCheck size={15} aria-hidden="true" />
-              <span><strong>Controlled strategy fixture.</strong> Same bounded strategy schema. No external model call.</span>
+              <span><strong>Controlled offline simulation.</strong> Same bounded strategy schema. No external model call.</span>
             </div>
           ) : null}
         </section>
