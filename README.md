@@ -262,7 +262,7 @@ Current local validation:
 | Gate | Result |
 | --- | --- |
 | Backend test suite | 413 passed |
-| Frontend test suite | 23 passed |
+| Frontend test suite | 28 passed |
 | Frontend lint | Passed |
 | Frontend production build | Passed |
 | Deterministic demo preflight | `DEMO STATUS: READY` |
