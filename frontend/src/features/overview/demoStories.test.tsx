@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CaseStoryBanner } from "../cases/CaseStoryBanner";
 import { caseStoryBanner } from "../cases/storyBannerRules";
 import type { CaseDetail, CaseListItem } from "../../types/api";
+import { caseContextLabel } from "../../lib/caseContext";
 import { DemoStories } from "./DemoStories";
 import { detectDemoStories } from "./storyDetection";
 
@@ -44,8 +45,19 @@ const realRecovery = caseItem({
   outcome_status: "RECOVERED",
   recovery_execution_status: "SUCCEEDED",
 });
-const highValue = caseItem({
-  case_reference: "case_high_value",
+const openAIHighValue = caseItem({
+  case_reference: "openai_evidence_high_value_v1",
+  amount_minor: 2_500_000,
+  data_origin: "SYNTHETIC_INPUT",
+  current_state: "POLICY_VALIDATED",
+  resolution_kind: "REQUIRES_APPROVAL",
+  strategy_action: "REQUEST_PAYMENT_METHOD_UPDATE",
+  strategy_provenance: "OPENAI",
+  policy_result: "REQUIRES_APPROVAL",
+  approval_status: "PENDING",
+});
+const offlineHighValue = caseItem({
+  case_reference: "demo_high_value_approval_v1",
   amount_minor: 2_500_000,
   data_origin: "SYNTHETIC_DEMO",
   current_state: "POLICY_VALIDATED",
@@ -72,7 +84,7 @@ const hardStop = caseItem({
   strategy_provenance: "OFFLINE_SIMULATION",
   policy_result: "BLOCKED",
 });
-const allCases = [realRecovery, highValue, alreadyCaptured, hardStop];
+const allCases = [realRecovery, offlineHighValue, openAIHighValue, alreadyCaptured, hardStop];
 
 function detail(overrides: Partial<CaseDetail>): CaseDetail {
   const base: CaseDetail = {
@@ -114,9 +126,11 @@ describe("semantic demo stories", () => {
     expect(story?.amountMinor).toBe(1_000);
   });
 
-  it("detects the pending high-value policy approval", () => {
+  it("selects the genuine OpenAI approval instead of the offline approval", () => {
     const story = detectDemoStories(allCases).find((item) => item.key === "highValueApproval");
-    expect(story?.caseItem?.case_reference).toBe("case_high_value");
+    expect(story?.caseItem?.case_reference).toBe("openai_evidence_high_value_v1");
+    expect(story?.caseItem?.strategy_provenance).toBe("OPENAI");
+    expect(story?.caseItem?.strategy_action).toBe("REQUEST_PAYMENT_METHOD_UPDATE");
   });
 
   it("detects already-captured protection without attribution", () => {
@@ -147,13 +161,29 @@ describe("semantic demo stories", () => {
     expect(realMarkup).toContain("Test Mode");
     expect(realMarkup).not.toContain("Synthetic Demo");
 
-    for (const syntheticStory of stories.filter((item) => item.key !== "realRecovery")) {
+    const openAIStory = stories.find((item) => item.key === "highValueApproval");
+    const openAIMarkup = renderToStaticMarkup(
+      <MemoryRouter><DemoStories stories={[openAIStory!]} /></MemoryRouter>,
+    );
+    expect(openAIMarkup).toContain("Synthetic Input");
+    expect(openAIMarkup).toContain("OpenAI Strategy");
+    expect(openAIMarkup).toContain("Request payment method update");
+    expect(openAIMarkup).not.toContain("Synthetic Demo");
+
+    for (const syntheticStory of stories.filter(
+      (item) => item.key !== "realRecovery" && item.key !== "highValueApproval",
+    )) {
       const markup = renderToStaticMarkup(
         <MemoryRouter><DemoStories stories={[syntheticStory]} /></MemoryRouter>,
       );
       expect(markup).toContain("Synthetic Demo");
       expect(markup).not.toContain("Test Mode");
     }
+  });
+
+  it("derives distinct priority-case context from accepted evidence identities", () => {
+    expect(caseContextLabel(openAIHighValue)).toBe("OpenAI payment-method update");
+    expect(caseContextLabel(offlineHighValue)).toBe("High-value recovery link");
   });
 });
 

@@ -169,11 +169,17 @@ describe("judge-facing evidence semantics", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter><EvidenceClasses evaluation={evaluation} recoveredProof={recovered} /></MemoryRouter>,
     );
-    expect(markup).toContain("Provider-verified Test Mode recovery");
+    expect(markup).toContain("Razorpay Test Mode evidence");
+    expect(markup).toContain("Recovery verified");
+    expect(markup).toContain("Captured-payment evidence confirms this Test Mode recovery");
     expect(markup).toContain("₹10.00");
     expect(markup).toContain("Synthetic batch evaluation");
     expect(markup).toContain("100");
     expect(markup).toContain("₹48,442.00");
+    expect(markup).toContain("synthetic recovered amount");
+    expect(markup).toContain("synthetic recovered cases");
+    expect(markup).toContain("already-captured protections");
+    expect(markup).not.toContain("current-state protections");
     expect(markup).toContain("not merchant revenue");
     expect(markup).toContain("never enter provider-backed recovery metrics");
   });

@@ -8,6 +8,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AuthorityBadge, OriginBadge, StatusBadge } from "../../components/Badges";
+import { displayEnum } from "../../lib/display";
 import { formatMoney } from "../../lib/format";
 import type { DemoStory, DemoStoryKey } from "./storyDetection";
 
@@ -54,6 +55,11 @@ export function DemoStories({ stories }: { stories: DemoStory[] }) {
               <StatusBadge value={story.caseItem.resolution_kind} />
               <OriginBadge origin={story.caseItem.data_origin} />
             </div>
+            {story.key === "highValueApproval" && story.caseItem.strategy_action ? (
+              <div className="demo-story-action">
+                {displayEnum(story.caseItem.strategy_action)}
+              </div>
+            ) : null}
             <div className="demo-story-authority">
               <AuthorityBadge authority={story.authority} />
             </div>

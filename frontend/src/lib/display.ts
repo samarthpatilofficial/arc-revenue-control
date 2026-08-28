@@ -11,6 +11,7 @@ const DISPLAY_LABELS: Readonly<Record<string, string>> = {
   EVIDENCE_BACKED_ATTRIBUTION: "Evidence-backed Attribution",
   CONTROLLED_SIMULATION: "Controlled Simulation",
   CONTROLLED_SYNTHETIC_INPUT: "Controlled Synthetic Input",
+  OPENAI_STRATEGY: "OpenAI Strategy",
   TEST_MODE: "Test Mode",
   LIVE_MODE: "Live Mode",
   SYNTHETIC_DEMO: "Synthetic Demo",

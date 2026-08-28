@@ -82,7 +82,7 @@ export function EvidenceClasses({
     <div className="evidence-class-grid">
       <article className="evidence-class-card provider-proof">
         <div className="evidence-class-eyebrow">
-          <CheckCircle2 size={16} aria-hidden="true" /> Provider-verified Test Mode recovery
+          <CheckCircle2 size={16} aria-hidden="true" /> Razorpay Test Mode evidence
         </div>
         {recoveredProof ? (
           <Link
@@ -90,7 +90,7 @@ export function EvidenceClasses({
             to={`/cases/${encodeURIComponent(recoveredProof.case_reference)}`}
           >
             <div className="proof-content">
-              <div className="proof-label">Provider-verified recovery</div>
+              <div className="proof-label">Recovery verified</div>
               <div className="proof-amount">
                 {formatMoney(
                   recoveredProof.recovered_amount_minor,
@@ -98,13 +98,13 @@ export function EvidenceClasses({
                 )}
               </div>
               <div className="proof-status"><StatusBadge value="RECOVERED" /></div>
-              <p className="proof-description">Captured-payment evidence validates this Test Mode recovery.</p>
+              <p className="proof-description">Captured-payment evidence confirms this Test Mode recovery.</p>
             </div>
             <div className="proof-evidence">
               <strong>Evidence chain</strong>
               <span><CheckCircle2 size={14} aria-hidden="true" /> Razorpay Test Mode</span>
               <span><CheckCircle2 size={14} aria-hidden="true" /> Deterministic Test Strategy</span>
-              <span><CheckCircle2 size={14} aria-hidden="true" /> Evidence-backed ARC attribution</span>
+              <span><CheckCircle2 size={14} aria-hidden="true" /> Evidence-backed ARC Attribution</span>
               <span className="proof-action">View recovery trace</span>
             </div>
           </Link>
@@ -120,14 +120,14 @@ export function EvidenceClasses({
         <div className="batch-primary-grid">
           <span><strong>{evaluation.metrics.cases_evaluated}</strong> cases evaluated</span>
           <span><strong>{formatMoney(evaluation.metrics.revenue_at_risk_minor, "INR")}</strong> revenue at risk</span>
-          <span><strong>{formatMoney(evaluation.metrics.synthetic_recovered_amount_minor, "INR")}</strong> synthetic recovered</span>
-          <span><strong>{evaluation.metrics.synthetic_recovered_cases}</strong> recovered cases</span>
+          <span><strong>{formatMoney(evaluation.metrics.synthetic_recovered_amount_minor, "INR")}</strong> synthetic recovered amount</span>
+          <span><strong>{evaluation.metrics.synthetic_recovered_cases}</strong> synthetic recovered cases</span>
         </div>
         <div className="batch-proof-grid">
           <span><strong>{evaluation.metrics.automated_actions_authorized}</strong> automated authorizations</span>
           <span><strong>{evaluation.metrics.human_approval_required}</strong> human approvals</span>
           <span><strong>{evaluation.metrics.safe_stop_cases}</strong> safe stops</span>
-          <span><strong>{evaluation.metrics.already_captured_protected}</strong> current-state protections</span>
+          <span><strong>{evaluation.metrics.already_captured_protected}</strong> already-captured protections</span>
         </div>
         <div className="batch-context-row">
           <span>{formatMoney(evaluation.metrics.revenue_evaluated_minor, "INR")} total evaluated</span>
@@ -204,6 +204,11 @@ export function OverviewPage() {
         actions={<span className="badge badge-info">Read-only operations</span>}
       />
 
+      <div className="metrics-context">
+        <strong>Provider-backed Test Mode metrics</strong>
+        <span>Operational recovery metrics. Synthetic evaluation is reported separately below.</span>
+      </div>
+
       {resource.loading || !summary ? (
         <MetricSkeletons />
       ) : (
@@ -227,9 +232,9 @@ export function OverviewPage() {
             icon={Gauge}
           />
           <MetricCard
-            label="Requires Attention"
+            label="Provider Exceptions"
             value={String(summary.requires_attention)}
-            caption="Review-required provider outcomes"
+            caption="Provider outcomes requiring review"
             icon={Users}
           />
         </div>
@@ -240,7 +245,7 @@ export function OverviewPage() {
           <div>
             <CheckCircle2 size={17} aria-hidden="true" />
             <span><strong>{summary.recovered_cases}</strong> Recovered Cases</span>
-            <small>{formatPercent(summary.recovery_rate_by_cases)} of evaluated cases</small>
+            <small>Provider-backed attribution only</small>
           </div>
           <div>
             <Hourglass size={17} aria-hidden="true" />
@@ -271,7 +276,7 @@ export function OverviewPage() {
       <SectionCard
         className="evidence-section"
         title="Evidence & Evaluation"
-        subtitle="Provider proof and controlled evaluation remain deliberately separate."
+        subtitle="Provider-backed recovery evidence and synthetic evaluation are reported separately."
       >
         {resource.loading || !evaluation ? (
           <div className="skeleton" style={{ minHeight: 260 }} />
@@ -283,7 +288,7 @@ export function OverviewPage() {
       <SectionCard
         className="demo-stories-section"
         title="Recovery Scenarios"
-        subtitle="Four evidence stories demonstrate recovery, human authority, current-state protection, and deterministic stopping."
+        subtitle="Representative cases show recovery, AI governance, current-state protection, and safe stopping."
       >
         {resource.loading ? (
           <div className="demo-stories-grid" aria-label="Loading recovery scenarios">
@@ -298,8 +303,8 @@ export function OverviewPage() {
 
       <SectionCard
         className="table-card"
-        title="Cases Requiring Attention"
-        subtitle="Prioritized from current persisted recovery state."
+        title="Priority Cases"
+        subtitle="Cases prioritized from current recovery state and policy requirements."
         headerAction={<Link className="button button-secondary" to="/cases">View all cases</Link>}
       >
         {resource.loading ? (

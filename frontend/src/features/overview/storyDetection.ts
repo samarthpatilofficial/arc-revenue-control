@@ -25,9 +25,9 @@ const STORY_COPY: Readonly<
     authority: "EVIDENCE_BACKED_ATTRIBUTION",
   },
   highValueApproval: {
-    title: "Human approval required",
-    explanation: "An offline strategy simulation proposed recovery; policy retained financial authority.",
-    authority: "DETERMINISTIC_POLICY",
+    title: "AI strategy — human approval required",
+    explanation: "OpenAI proposed a bounded recovery strategy; deterministic policy retained financial authority.",
+    authority: "OPENAI_STRATEGY",
   },
   alreadyCaptured: {
     title: "Already captured — no action",
@@ -80,7 +80,10 @@ export function detectDemoStories(cases: CaseListItem[]): DemoStory[] {
   const highValueApproval = highestValue(
     cases,
     (item) =>
-      item.data_origin === "SYNTHETIC_DEMO" &&
+      item.case_reference === "openai_evidence_high_value_v1" &&
+      item.data_origin === "SYNTHETIC_INPUT" &&
+      item.strategy_provenance === "OPENAI" &&
+      item.strategy_action === "REQUEST_PAYMENT_METHOD_UPDATE" &&
       item.policy_result === "REQUIRES_APPROVAL" &&
       item.approval_status === "PENDING",
     (item) => item.amount_minor,
