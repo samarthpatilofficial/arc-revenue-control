@@ -11,20 +11,18 @@ ARC is an event-driven control plane that detects revenue at risk, reconciles cu
 
 ## Live demo
 
+> **Demo note:** The backend runs on a Render Free instance and may sleep after inactivity.
+> On the first visit, the evaluator can take around a minute to become operational.
+> ARC will show `Waking demo backend...` and retry automatically.
+
 **Live evaluator:** [arc-revenue-control-ui.samarthpatilofc.workers.dev](https://arc-revenue-control-ui.samarthpatilofc.workers.dev)
 
 - The public evaluator is read-only.
-- Razorpay evidence is Test Mode evidence, not live money.
-- Synthetic batch metrics are controlled evaluation results, not merchant revenue.
-- The hosted evaluator reads sanitized persisted evidence; it does not rerun provider or model operations.
+- Razorpay evidence shown in the demo is from Test Mode, not live money.
+- Synthetic batch results are controlled evaluation results, not merchant revenue.
+- The hosted evaluator uses sanitized persisted evidence and does not rerun Razorpay or OpenAI operations.
 
-The API runs on a Render Free instance. After a period of inactivity, the
-first request may take about a minute while the backend wakes. ARC shows a
-`Waking demo backend…` state and retries automatically.
-
-Live evaluator verification includes API health, database readiness, all five
-evidence cases, read-only approval/recovery/audit views, and successful direct
-refresh of deep SPA routes.
+The live evaluator includes all five evidence cases, approval and recovery views, decision audit, API health checks, and database readiness.
 
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
